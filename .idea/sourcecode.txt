@@ -1,0 +1,228 @@
+// ==== Level 1. Fibonacci Sequence ====
+func main() -> int { // or `main:`
+    list<int> nums = [0, 1]  // Explicit type
+
+    for int i = 1, i <= 100, i += 1 {
+        int now = nums[i]
+        int prev = nums[i - 1]
+        nums.append(now + prev)
+    }
+
+    runtime::Out($"Fibonacci Sequence ({nums.Size} terms):")
+    runtime::Out(nums.Join(", "))
+    return 0
+}
+
+
+// ==== Level 2. Rocket Simulator ====
+@include "Space.hpp" // C++ interop
+@usingns Space
+
+enum LaunchError { Success, FuelLow, EngineFailure }
+
+class Rocket<T> {
+    string name
+    double fuel
+    bool is_launched = false
+    public T payload
+
+    public func Rocket(string name, double fuel, T payload) {
+        this->name = name
+        this->fuel = fuel
+        this->payload = payload
+    }
+
+    public func Launch() -> LaunchError? {
+        try {
+            Hardware::Ignite()
+        } except (Error) {
+            return LaunchError::EngineFailure
+        }
+
+        fuel -= 75.0
+        is_launched = true
+
+        return fuel <= 20.0 ? LaunchError::FuelLow : void
+    }
+}
+
+class Satellite {
+    string name
+    
+    public:
+    func Satellite(string name) {
+        this->name = name
+    }
+
+    func Activate() {
+        runtime::Out($"Hello from ${name}!")
+    }
+}
+
+main:
+    Rocket<Satellite> rocket = Rocket("MilkyWay1", 100.0, Satellite("Coffee"))
+
+    switch rocket.Launch() {
+        case void => {
+            rocket.payload.Activate()
+        }
+        case LaunchError err => {
+            runtime::Out($"Launch failed: ${err}")
+        }
+    }
+
+    return 0 // or `runtime::Halt()`
+
+
+
+// ==== Level 3. Kinematics ====
+
+class Vector3 {
+    public:
+    double x, y, z
+
+    func Vector3(double x = 0, double y = 0, double z = 0) : x(x), y(y), z(z) {}
+
+    func Cross(Vector3 other) -> Vector3 {
+        return Vector3(
+            this->y * other.z - this->z * other.y,
+            this->z * other.x - this->x * other.z,
+            this->x * other.y - this->y * other.x
+        )
+    }
+
+    @operator+(Vector3 other) -> Vector3 {
+        return Vector3(
+            this->x + other.x,
+            this->y + other.y,
+            this->z + other.z
+        )
+    }
+
+    @operator*(double scalar) -> Vector3 {
+        return Vector3(
+            this->x * scalar,
+            this->y * scalar,
+            this->z * scalar
+        )
+    }
+
+    @operator-() -> Vector3 {
+        return Vector3(-this->x, -this->y, -this->z)
+    }
+}
+
+
+class RigidBody {
+    Vector3 position, velocity, acceleration
+    double mass
+    
+    func Update(float dt) -> void {
+        @assert(dt > 0)
+        velocity += acceleration * dt
+        position += velocity * dt
+        acceleration = Vector3()  // Reset
+    }
+    
+    func ApplyForce(Vector3 force) -> void{
+        acceleration += force / mass
+    }
+}
+
+func main() -> int {
+    RigidBody body = RigidBody(
+        position = Vector3(0, 10, 0),
+        mass = 2.0
+    )
+
+    Vector3 gravity = Vector3(0, -9.8, 0)
+    float timestep = 0.016f32  // ~60fps
+
+    for int frame in math::Range(0, 100):
+        body.ApplyForce(gravity * body.mass)
+        body.Update(timestep)
+        runtime::Out($"Frame {frame}: Position = {body.position.ToString()}")
+    return 0
+}
+
+// ==== Level 4. Game Entities ====
+
+class Entity {
+    virtual func GetName() -> string = 0 // Override necessary
+    virtual func Update() -> void { runtime::Out("Update!") } // Override not necessary
+}
+
+class Player : public Entity {
+    string name
+    Vector3 position
+    
+    public:
+    Player(string name) {
+        this->name = name
+    }
+
+    override func GetName() -> string {
+        return $"Player: {this->name}"
+    }
+
+    override func Update() -> void {
+        position += Vector3(1, 0, 0)  // Move right
+    }
+}
+
+class Enemy : public Entity {
+    override func GetName() -> string {
+        return "Enemy"
+    }
+    
+    override func Update() {
+        // AI logic here...
+    }
+}
+
+func main() -> int {
+    // Game loop
+    list<Entity> entities = [
+        Player("Alice"),
+        Enemy(),
+        Player("Bob")
+    ]
+
+    for entity in entities {
+        entity.Update()
+        runtime::Out(entity.GetName())
+    }
+    return 0
+}
+
+// ==== Level 5. C++ interop ====
+
+@include "my_math.esp" // Espresso Lang includes
+@usingns std
+@cpp {
+    // Pure C++. Need C++ syntax, not Espresso
+    bool is_prime(int n) {
+        if n < 2 {
+            return false;
+        }
+        for int i = 2; i <= int(math::sqrt(n)); i+=1 {
+            if n % i == 0 {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+main: 
+    list<int> primes = []
+
+    for int num = 0, num < 50, num += 1 {
+        if is_prime(num) {
+            primes.append(num)
+        }
+    }
+
+    cout << $"Primes under 50: {primes.Join(", ")}" << endl
+
+    return 0

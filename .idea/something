@@ -1,0 +1,37 @@
+struct CompilationOptions {
+    // ---- Metadata ----
+    std::optional<std::string> project_name;
+    std::optional<std::string> version = "v1.0.0";
+    std::optional<std::vector<std::string>> authors;
+
+    // ---- Build config ----
+    fs::path output_dir = "build/";
+    std::string output_name;            // -o overrides this, else derived from project_name
+    std::string target_triple = "x86_64-linux";
+    OptimisationLevel opt_level = OptimisationLevel::DEBUG;
+    
+    // ---- Entry point ----
+    std::string entry_file;             // from config, or overridden by single_file
+    fs::path project_root;
+    fs::path entry_path;                // resolved absolute path
+    fs::path config_file_path = "xenon.toml"
+    
+    // ---- Warnings ----
+    bool warnings_as_errors = false;    // -Werror or [pedantic]
+    std::unordered_map<std::string, WarningLevel> warnings = {
+        {"dangling_ref",      WarningLevel::ERROR},
+        {"unused_var",        WarningLevel::WARN},
+        {"dead_code",         WarningLevel::WARN},
+        {"unreachable_code",  WarningLevel::WARN}
+    };
+
+    // ---- Flags ----
+    bool expect_config_file = true;
+    bool no_colour = false;
+    bool verbose = false;
+
+    // ---- DEBUG ----
+    bool dump_tokens = false;
+    bool dump_ast = false;
+  };
+    

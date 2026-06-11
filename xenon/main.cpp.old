@@ -1,0 +1,70 @@
+#include <iostream>
+
+#include "common/dataclasses.h"
+#include "common/diagnostics.h"
+#include "parser/parser.h"
+#include "lexer/lexer.h"
+#include "ast/ast_printer.h"
+#include "fsloader/fsloader.h"
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+// Global diagnostics instance (adjust namespace/name as needed)
+// You might already have this defined elsewhere
+
+std::string read_file(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        std::cerr << "Error: cannot open file '" << path << "'\n";
+        return "";
+    }
+
+    auto size = file.tellg();
+    std::string buffer(size, '\0');
+
+    file.seekg(0);
+    file.read(&buffer[0], size);
+    
+    return buffer;
+}
+    
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <source-file>\n";
+        return 1;
+    }
+
+    auto source = read_file(argv[1]);
+    if (source.empty()) return 1;
+
+    try {
+        // Test Lexer
+        std::cout << "=== Tokens ===\n";
+        auto ts = xenon::Lexer::lex(source, argv[1]);
+
+        for (const auto& token : ts) {
+            std::cout << token.to_string() << std::endl;
+        }
+        
+        // Test Parser
+        std::cout << "\n=== Parsing ===\n";
+        auto result = xenon::Parser::parse(ts, argv[1]);
+        std::cout << "Done parsing! No infinite loop!" << std::endl;
+
+        // Test pretty-printing (optional)
+        // std::cout << ast->to_string() << std::endl;
+
+        xenon::ASTPrinter::print_ast(result);
+
+        return xenon::g_diagnostics.exit_gracefully();
+    } catch (const xenon::CompilerException& e) {
+        std::cerr << e.what() << std::endl;
+        return xenon::g_diagnostics.exit_gracefully();
+    } catch (const std::exception& e) {
+        std::cerr << "Abnormal error!\n" << e.what() << std::endl;
+        return 1;
+    }
+}

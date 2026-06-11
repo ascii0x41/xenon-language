@@ -1,0 +1,397 @@
+## This is a comperehensive example of Xenon Syntax
+
+```
+import "std/io"
+import "std/math"
+import "std/collections"
+import "math/geometry"
+import "utils/validation"
+
+module full_syntax;
+
+// ============================================
+// Enums
+// ============================================
+enum Colour {
+    RED,
+    BLUE,
+    GREEN
+}
+
+enum ResultCode {
+    SUCCESS,
+    ERR_DIV_ZERO,
+    ERR_OVERFLOW,
+    ERR_INVALID_INPUT
+}
+
+// ============================================
+// Classes - Reworked
+// ============================================
+
+trait ToString {
+    func to_string() -> str;
+}
+
+trait Processable {
+    operator+(other: ref Self) -> Self;
+    func process();
+}
+
+class Point3D {
+    pub var x: i32;
+    pub var y: i32;
+    pub var z: i32;
+}
+
+class DataBuffer {
+    var data: ptr i32;
+    var buffer_size: size;
+}
+
+impl Point3D {
+    pub func Point3D(x: i32, y: i32, z: i32) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    static pub func origin() -> Point3D {
+        return Point3D(0, 0, 0);
+    }
+
+    operator+=(other: ref Point3D) -> mut ref Point3D {
+        this.x += other.x;
+        this.y += other.y;
+        this.z += other.z;
+        return *this;
+    }
+}
+
+impl ToString for Point3D {
+    func to_string() -> str {
+        return $"({this.x}, {this.y}, {this.z})";
+    }
+}
+
+impl Processable for Point3D {
+    pub func process() {
+        io::writeln($"Processing point: {this.to_string()}");
+    }
+}
+
+impl DataBuffer {
+        pub func DataBuffer(buffer_size: size) {
+        this.buffer_size = buffer_size;
+        this.data = new [i32; buffer_size];
+    }
+
+    pub func set(index: size, value: i32) {
+        if index < this.buffer_size {
+            this.data[index] = value;
+        }
+    }
+
+    pub func get(index: size) -> i32 {
+        if index < this.buffer_size {
+            return this.data[index];
+        }
+        return 0;
+    }
+
+    pub func ~DataBuffer() {
+        if this.data != nullptr {
+            delete this.data;
+            this.data = nullptr;
+        }
+    }
+}
+
+
+// ============================================
+// Generics with Result
+// ============================================
+func process_all<T: Processable>(arr: ref [T], callback: func(T) -> void) {
+    foreach item in arr {
+        item.process();
+        callback(item);
+    }
+}
+
+func divide(a: f64, b: f64) -> Result<f64, str> {  // Result<i32, i32> is disallowed!
+    if b == 0.0 {
+        return "Division by zero";
+    }
+    return a / b;
+}
+
+func safe_divide_all(numbers: ref [f64], divisor: f64) -> Result<[f64], str> {
+    var results: [f64];
+    
+    foreach num in numbers {
+        let result = divide(num, divisor)?; // Auttomatic check for error type. If present, returns early
+        results.push(result.ok());
+    }
+    
+    return results;
+}
+
+// ============================================
+// Memory Model Functions
+// ============================================
+
+func raw_pointer_demo() -> i32 {
+    var a = 42;
+    let pA: ptr i32 = &a;
+    
+    *pA = 41;
+    
+    return a;  // returns 41
+}
+
+func box_pointer_demo() -> i32 {
+    var result = 0;    
+    let box_ptr: box i32 = new i32(42);
+    *box_ptr = 10;
+    result = *box_ptr;
+
+    return result;  // returns 10
+}
+
+func box_move_demo() -> i32 {
+    let a: box i32 = new i32(42);
+    let b = move(a);      // a becomes nullptr
+    
+    if a != nullptr {
+        return *a;  // won't execute
+    }
+    
+    return *b;  // returns 42
+}
+
+func ref_demo(point: ref Point3D) -> str {
+    return point.to_string();
+}
+
+func mut_ref_demo(point: mut ref Point3D, x: i32, y: i32, z: i32) {
+    point.x = x;
+    point.y = y;
+    point.z = z;
+}
+
+func manual_memory_demo() -> i32 {
+    let raw: ptr i32 = new i32(100);
+    *raw = 200;
+    let result = *raw;
+    delete raw;
+    return result;
+}
+
+func pointer_type_demo() {
+    var x: i32 = 42;
+
+    // Raw Pointer - immutable
+    let rawX: ptr i32 = &x;
+    // *rawX = 11; // ERROR: rawX is immutable
+
+    // Raw Pointer - mutable
+    let m_rawX: mut ptr i32 = &x;
+    *m_rawX = 11; // OK
+
+    // Box Pointer - immutable
+    let boxX: box i32 = new i32(42);
+    // *boxX = 11; // ERROR: boxX is immutable
+
+    // Box Pointer - mutable
+    let m_boxX: mut box i32 = new i32(42);
+    *m_boxX = 11; // OK
+
+    // Reference - immutable
+    let refX: ref i32 = &x;
+    // *refX = 11; // ERROR: refX is immutable
+
+    // Reference - mutable
+    let m_refX: mut ref i32 = &x;
+    *m_refX = 11; // OK
+}
+
+func buffer_demo() -> i32 {
+    var buffer = DataBuffer(10);
+    
+    buffer.set(0, 100);
+    buffer.set(1, 200);
+    buffer.set(2, 300);
+    
+    let result = buffer.get(1);  // 200
+    
+    return result;
+}  // Buffer is automatically cleaned up here via DAEOS (basically Xenon's version of RAII)
+
+// ============================================
+// Control Flow
+// ============================================
+func fibonacci(n: uint) -> uint {
+    var x: uint = 0;
+    var y: uint = 1;
+
+    foreach _ in range(n - 1) {
+        let temp = x;
+        x = y;
+        y = temp + y;
+    }
+    return x;
+}
+
+func gcd(m: uint, n: uint) -> uint {
+    var x = m;
+    var y = n;
+    
+    while x != y {
+        if x > y {
+            x -= y;
+        } else {
+            y -= x;
+        }
+    }
+    return x;
+}
+
+func lcm(m: uint, n: uint) -> uint {
+    return (m * n) / gcd(m, n);
+}
+
+func read_until_zero() -> [i32] {
+    var numbers: [i32];
+    var input: i32;
+    
+    do {
+        let line = io::readln("Enter a number: ");
+        input = strtoi(line);
+        if input != 0 {
+            numbers.push(input);
+        }
+    } while input != 0;
+    
+    return numbers;
+}
+
+// ============================================
+// Match expression (enums only)
+// ============================================
+func colour_to_text(variant: Colour) -> str {
+    match variant {
+        case Colour::RED => return "Red";
+        case Colour::BLUE => return "Blue";
+        case _ => return "Green";
+    }
+}
+
+func handle_code(code: ResultCode) -> str {
+    match code {
+        case ResultCode::SUCCESS => return "Operation succeeded";
+        case ResultCode::ERR_DIV_ZERO => return "Division by zero";
+        case ResultCode::ERR_OVERFLOW => return "Overflow occurred";
+        case ResultCode::ERR_INVALID_INPUT => return "Invalid input";
+        case _ => return "Unknown error";
+    }
+}
+
+// ============================================
+// Test Function
+// ============================================
+func run_tests() -> i32 {
+    // Variable declarations
+    let x: i32 = 42;
+    var name: str = "Xenon";
+    var flag: bool = false;
+    var pointer: ptr i32 = nullptr;
+
+    // Numeric literals
+    let integer = 42;
+    let suffixed = 42i8;
+    let floating = 3.14;
+    let scientific = 1.0e9;
+    let hex = 0xFF;
+    let binary = 0b1010;
+    let complex = 3 + 4i;
+
+    // String interpolation
+    io::writeln($"Hello, {name}! The answer is {x}.");
+
+    // Class usage
+    let p1 = Point3D(1, 2, 3);
+    let p2 = Point3D(4, 5, 6);
+    let p3 = p1 + p2;
+    let origin = Point3D::origin();
+
+    io::writeln($"p3 = {p3.to_string()}");
+    io::writeln($"origin = {origin.to_string()}");
+
+    p1.process();
+
+    // Reference demo (non-nullable)
+    io::writeln(ref_demo(ref p1));
+
+    // Mutable reference demo
+    mut_ref_demo(mut ref p1, 10, 20, 30);
+    io::writeln($"After mutation: {p1.to_string()}");
+
+    // Result handling with methods
+    let div_result = divide(10.0, 0.0);
+    if div_result.has_error() {
+        io::writeln($"Error: {div_result.error()}");
+    } else {
+        io::writeln($"Result: {div_result.ok()}");
+    }
+
+    // Successful division
+    let good_div = divide(10.0, 2.0);
+    if good_div.has_error() {
+        io::writeln($"Unexpected error: {good_div.error()}");
+    } else {
+        io::writeln($"10.0 / 2.0 = {good_div.ok()}");
+    }
+
+    // Safe divide all
+    let numbers = [1.0, 2.0, 3.0, 4.0];
+    let safe_result = safe_divide_all(ref numbers, 2.0);
+    if safe_result.has_error() {
+        io::writeln($"Batch division failed: {safe_result.error()}");
+    } else {
+        io::writeln("Batch division succeeded");
+    }
+
+    // Enum matching
+    let colour = Colour::BLUE;
+    io::writeln(colour_to_text(colour));
+
+    let code = ResultCode::ERR_DIV_ZERO;
+    io::writeln(handle_code(code));
+
+    // Math
+    io::writeln($"fibonacci(10) = {fibonacci(10)}");
+    io::writeln($"gcd(48, 18) = {gcd(48, 18)}");
+    io::writeln($"lcm(12, 18) = {lcm(12, 18)}");
+
+    // Memory model demos
+    io::writeln($"raw_pointer_demo: {raw_pointer_demo()}");
+    io::writeln($"box_pointer_demo: {box_pointer_demo()}");
+    io::writeln($"box_move_demo: {box_move_demo()}");
+    io::writeln($"manual_memory_demo: {manual_memory_demo()}");
+    io::writeln($"buffer_demo: {buffer_demo()}");
+    
+    pointer_type_demo();
+
+    // If/elif/else
+    let value = 7;
+    if value > 10 {
+        io::writeln("value is greater than 10");
+    } elif value > 5 {
+        io::writeln("value is between 5 and 10");
+    } else {
+        io::writeln("value is less than 5");
+    }
+
+    return 0;
+}
+```
