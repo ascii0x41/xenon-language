@@ -54,9 +54,9 @@ For a step-by-step introduction, see [Getting Started](docs/getting-started.md).
 ## Project Goals
 
 Xenon aims to explore:
-- safe systems programming
+- (somewhat) safe systems programming
 - scientific and numerical computing
-- modern compiler xechitecture
+- modern compiler architecture
 - expressive but predictable language design
 
 ## Authors
