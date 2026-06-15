@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "tokens/tokens.h"
 #include <format>
 
 namespace xenon {
@@ -2044,14 +2045,12 @@ ConstructPtr Parser::parse_continue_stmt() {
 
 void Parser::parse_import_decl() {
     SourceLocation l = get_location();
-    std::string path = std::string(expect(TokenType::STRING_LITERAL, "Expected module path string").lexeme);
+    std::string path;
 
-    std::optional<std::string> module_alias;
-    if (accept(TokenType::AS)) {
-        module_alias = std::string(expect(TokenType::IDENTIFIER, "Expected alias name after 'as'").lexeme);
-    }
+    if (accept(TokenType::IDENTIFIER)) path = peek().lexeme; // User
+    else path = expect(TokenType::STRING_LITERAL, "Expected identifier or string").lexeme;
 
-    imports_.emplace_back(l, std::move(path), std::move(module_alias));
+    imports_.emplace_back(l, std::move(path));
 }
 
 void Parser::parse_export_decl() {

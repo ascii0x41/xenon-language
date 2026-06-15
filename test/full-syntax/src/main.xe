@@ -134,7 +134,7 @@ func safe_divide_all(numbers: ref [f64], divisor: f64) -> [f64]!str {
     
     foreach num in numbers {
         let result = divide(num, divisor)?; // Auttomatic check for error type. If present, returns early
-        results.push(result.ok());
+        results.push(result.ok()); // Perfectly safe!
     }
     
     return results;

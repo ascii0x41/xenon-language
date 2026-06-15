@@ -3,9 +3,7 @@
 #include "common/dataclasses.h"
 #include <string>
 #include <vector>
-#include <memory>
 #include <optional>
-#include <unordered_map>
 #include <variant>
 
 namespace xenon {
@@ -898,9 +896,8 @@ namespace xenon {
     struct ImportDecl {
         SourceLocation location;
         std::string                module_path;
-        std::optional<std::string> module_alias;
-        explicit ImportDecl(SourceLocation l, std::string path, std::optional<std::string> alias = std::nullopt)
-            : location(std::move(l)), module_path(std::move(path)), module_alias(std::move(alias)) {}
+        explicit ImportDecl(SourceLocation l, std::string path)
+            : location(std::move(l)), module_path(std::move(path)) {}
     };
 
     struct ExportDecl {

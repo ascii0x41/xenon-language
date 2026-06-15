@@ -1198,7 +1198,7 @@ private:
 
     // ---- Module visitors ----
     void visit_import_decl(const ImportDecl& decl) {
-        writeln("ImportDecl: " + decl.module_path + (decl.module_alias ? " as " + *decl.module_alias : "") +
+        writeln("ImportDecl: " + decl.module_path +
                 " [" + format_location(decl.location) + "]");
     }
 

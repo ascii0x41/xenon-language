@@ -7,6 +7,15 @@ build/
 .cursor/
 .idea/
 *.o
+*.obj
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.pch
+*.idb
+*.ipdb
+*.iobj
 *.exe
 *.out
 __pycache__/

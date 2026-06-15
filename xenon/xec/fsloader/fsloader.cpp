@@ -13,7 +13,7 @@
 R"config([project]
 name = "my_project"
 version = "0.1.0"
-entry = "src/main.ar"
+entry = "src/main.xe"
 authors = ["Your Name"]
 
 [build]
@@ -276,7 +276,7 @@ namespace xenon {
                 "No xenon.toml found. Are you inside a xenon project?");
             g_diagnostics.note(
                 "  Run from a directory containing xenon.toml, or use:\n"
-                "    xec --print-ast <file.ar>  for single-file mode.");
+                "    xec --print-ast <file.xe>  for single-file mode.");
             return nullptr;
         }
 
@@ -319,12 +319,12 @@ namespace xenon {
         fs::path from_dir = fs::path(from_file).parent_path();
         std::cout << "Finding import path for " << import_spec << " relative to project root \n";
 
-        // Helper to add .ar extension only if not already present
+        // Helper to add .xe extension only if not already present
         auto ensure_ar_extension = [](const std::string& path_str) -> std::string {
-            if (path_str.length() >= 3 && path_str.substr(path_str.length() - 3) == ".ar") {
-                return path_str;  // Already has .ar
+            if (path_str.length() >= 3 && path_str.substr(path_str.length() - 3) == ".xe") {
+                return path_str;  // Already has .xe
             }
-            return path_str + ".ar";
+            return path_str + ".xe";
         };
 
         // Relative imports (starting with "./"): resolve relative to current file's directory
@@ -382,16 +382,16 @@ namespace xenon {
             toml_file << SAMPLE_CONFIG_CONTENT;
         }
 
-        // Template src/main.ar content
-        fs::path main_path = src_dir / "main.ar";
+        // Template src/main.xe content
+        fs::path main_path = src_dir / "main.xe";
 
 
-        // Write src/main.ar
+        // Write src/main.xe
         {
             std::ofstream main_file(main_path);
 
             if (!main_file) {
-                std::cerr << "Error: failed to create src/main.ar\n";
+                std::cerr << "Error: failed to create src/main.xe\n";
                 return 1;
             }
 

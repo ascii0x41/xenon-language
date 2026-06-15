@@ -74,6 +74,7 @@ namespace xenon {
         BlockPtr ast;
         std::vector<ImportDecl> imports;
         std::vector<ExportDecl> exports;
+        std::string module;
     };
 
     struct SourceFile {
