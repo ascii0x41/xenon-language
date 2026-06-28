@@ -1,8 +1,6 @@
-import "std/io"
-import "std/math"
-import "std/collections"
-import "math/geometry"
-import "utils/validation"
+import "std/io"     // fs and io bc everything is a file in POSTIX
+import "std/math"   // complex maths, linear algebra, fft
+import "std/collections"    // queue, pair, stack, ...
 
 module full_syntax;
 
@@ -100,7 +98,7 @@ class DataBuffer<T> {
     }
 }
 
-impl ToString for DataBuffer<T> where T: ToString {
+impl ToString for DataBuffer<T: ToString> {
     func to_string() -> str {
         var result: str;
         foreach i in range(0, this.buffer_size) {

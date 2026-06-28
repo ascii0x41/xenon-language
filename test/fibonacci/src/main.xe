@@ -6,9 +6,7 @@ func main() -> i32 {
     var nums: [int] = [0, 1];
 
     foreach i in range(1, 101) {
-        let now = nums[i];
-        let prev = nums[i-1];
-        nums.append(now + prev);
+        nums.append(nums[i] + nums[i-1]);
     }
 
     io::writeln($"Fibonacci Sequence ({nums.size()} terms):");
