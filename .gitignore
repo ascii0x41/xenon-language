@@ -1,5 +1,7 @@
 .bin/
 build/
+.cursor/
+.idea/
 .test/
 .trash/
 .test_results/
