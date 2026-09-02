@@ -1,6 +1,0 @@
-module main;
-
-func main() -> i32 {
-    println("Hello, World!");
-    return 0;
-}

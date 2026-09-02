@@ -12,28 +12,28 @@ xec [command] [options] [--] [file]
 
 - `build` – Build the current project using `xenon.toml`.
 - `check` – Parse and validate a project or single file.
-- `run <file.ar>` – Build and run a single file.
+- `run <file.xe>` – Build and run a single file.
 - `help` – Show help text.
 - `version` – Show compiler version information.
 
-If no command is provided, `xec` assumes `build` for project mode or direct file mode when a `.ar` file is passed.
+If no command is provided, `xec` assumes `build` for project mode or direct file mode when a `.xe` file is passed.
 
 ## Direct File Mode
 
-When you pass a `.ar` file directly, `xec` operates on that file without `xenon.toml`.
+When you pass a `.xe` file directly, `xec` operates on that file without `xenon.toml`.
 
 Examples:
 
 ```bash
-xec hello.ar
-xec check hello.ar
-xec run hello.ar
-xec hello.ar -o output_binary
+xec hello.xe
+xec check hello.xe
+xec run hello.xe
+xec hello.xe -o output_binary
 ```
 
 ## Project Mode
 
-If no `.ar` file is provided, `xec` sexeches upward from the current working directory for `xenon.toml`.
+If no `.xe` file is provided, `xec` sexeches upward from the current working directory for `xenon.toml`.
 
 Examples:
 

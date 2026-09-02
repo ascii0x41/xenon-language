@@ -24,6 +24,7 @@
 
 // Hints to the backend optimizer that a function will never return an error
 // or throw exceptions, reducing the overhead of stack unwinding tables.
+// But we don't have exceptions, so this is purely a signal to the optimizer for better code generation.
 #if defined(__GNUC__) || defined(__clang__)
     #define XENON_NOTHROW __attribute__((nothrow))
 #else

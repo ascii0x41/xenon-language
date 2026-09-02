@@ -35,14 +35,7 @@ FetchContent_Declare(
     GIT_TAG v3.4.0
 )
 
-FetchContent_Declare(
-    argparse
-    GIT_REPOSITORY https://github.com/p-ranav/argparse
-    GIT_TAG v3.0
-)
-
-
-FetchContent_MakeAvailable(tomlplusplus argparse)
+FetchContent_MakeAvailable(tomlplusplus)
 
 # --------------------------------------------------
 # Sources
@@ -78,7 +71,6 @@ target_link_libraries(
     xec
     PRIVATE
     tomlplusplus::tomlplusplus
-    argparse
 )
 
 # --------------------------------------------------

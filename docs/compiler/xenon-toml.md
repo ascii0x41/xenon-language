@@ -23,7 +23,7 @@ Example:
 [project]
 name = "hello"
 version = "0.1.0"
-entry = "src/main.ar"
+entry = "src/main.xe"
 authors = ["Your Name"]
 ```
 

@@ -1,250 +1,566 @@
-#include "compiler_driver.h"
+#include "driver/compiler_driver.h"
+#include "lexer/lexer.h"
+#include "parser/parser.h"
+#include "semantic/analyser.h"
+#include "toml/toml_parser.h"
 
+#include <algorithm>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <format>
 
-namespace xenon {
+namespace xenon::driver {
 
-    using config::Command;
-    using config::OptimisationLevel;
-    using config::ConfigFile;
+    namespace {
 
-    void CompilerDriver::verbosity_print(const std::string& message) {
-        if (options_.verbose) {
-            std::cout << message << "\n";
-        }
-    }
+    constexpr const char* SAMPLE_CONFIG_CONTENT =
+R"([project]
+name = "my_project"
+version = "0.1.0"
+authors = ["Your Name"]
 
-    bool CompilerDriver::run() {
-        // Route to the appropriate command handler
-        if (options_.command == config::Command::BUILD) {
-            return build();
-        } else if (options_.command == config::Command::CHECK) {
-            return check();
-        } else {
-            // This should not happen if main() properly filters HELP/VERSION/INIT
-            g_diagnostics.error("Invalid command for driver");
-            return false;
-        }
-    }
+source_files = [
+    "src/main.xe",
+]
 
-    bool CompilerDriver::load_config() {
-        // Load xenon.toml and apply CLI overrides
-        verbosity_print("Loading xenon.toml...");
-        
-        // Create a temporary ConfigFile with CLI defaults to pass to FsLoader
-        ConfigFile cli_defaults;
-        project_ = FsLoader::load_project(cli_defaults);
-        if (!project_) return false;
+[build]
+output = "build/"
+target = "x86_64-linux"
+optimisation = "debug"
+)";
 
-        // Get the loaded config and merge CLI options into it
-        config_ = project_->config;
-        cli::reconcile_config_file_with_cli_options(options_, config_);
-        
-        verbosity_print("Entry: " + config_.entry_path.string());
-        return true;
-    }
+    constexpr const char* SAMPLE_MAIN_CONTENT =
+R"(module main;
 
-    bool CompilerDriver::dump_and_check_entry_file() {
-        // Load entry file for debug dumps if requested
-        if (!project_) {
-            return false;
+func main() -> i32 {
+    println("Hello, World!");
+    return 0;
+}
+)";
+
+    std::vector<std::string> parse_string_array(const std::string& value) {
+        std::vector<std::string> authors;
+        if (value.size() < 2 || value.front() != '[' || value.back() != ']') {
+            return authors;
         }
 
-        const SourceFile& entry_sf = project_->entry;
+        std::string inner = value.substr(1, value.size() - 2);
+        std::string current;
+        bool in_quotes = false;
 
-        if (!options_.dump_tokens && !options_.dump_ast) {
-            return true;  // Nothing to dump
-        }
-
-        // Lex
-        auto tokens = Lexer::lex(entry_sf.source, entry_sf.rel_path);
-        if (options_.dump_tokens) {
-            std::cout << "=== Tokens: " << entry_sf.rel_path << " ===\n";
-            for (const auto& t : tokens) {
-                std::cout << t.to_string() << "\n";
+        for (char c : inner) {
+            if (c == '"') {
+                in_quotes = !in_quotes;
+                continue;
             }
-            std::cout << "\n";
+            if (c == ',' && !in_quotes) {
+                if (!current.empty()) {
+                    authors.push_back(current);
+                    current.clear();
+                }
+                continue;
+            }
+            if (in_quotes || (!std::isspace(static_cast<unsigned char>(c)) && c != ',')) {
+                current += c;
+            }
         }
 
-        // Parse
-        ParserResult result = Parser::parse(tokens, entry_sf.rel_path);
-        if (options_.dump_ast) {
-            std::cout << "=== AST: " << entry_sf.rel_path << " ===\n";
-            ASTPrinter::print_ast(result);
-            std::cout << "\n";
+        if (!current.empty()) {
+            authors.push_back(current);
+        }
+
+        return authors;
+    }
+
+    } // namespace
+
+    // ============================================================
+    // ModuleNamespaceTree
+    // ============================================================
+
+    std::vector<std::string> ModuleNamespaceTree::split_name(const std::string& name) {
+        std::vector<std::string> parts;
+        std::string current;
+        for (size_t i = 0; i < name.size(); ++i) {
+            if (name[i] == ':' && i + 1 < name.size() && name[i + 1] == ':') {
+                if (!current.empty()) {
+                    parts.push_back(current);
+                    current.clear();
+                }
+                ++i;
+                continue;
+            }
+            if (name[i] == ':') {
+                continue;
+            }
+            current.push_back(name[i]);
+        }
+        if (!current.empty()) {
+            parts.push_back(current);
+        }
+        return parts;
+    }
+
+    void ModuleNamespaceTree::collect_module_names(
+        const std::unordered_map<std::string, Module>& children,
+        std::vector<std::string>& out,
+        const std::string& prefix)
+    {
+        for (const auto& [name, child] : children) {
+            const std::string qualified = prefix.empty() ? name : prefix + "::" + name;
+            out.push_back(qualified);
+            collect_module_names(child.children, out, qualified);
+        }
+    }
+
+    void ModuleNamespaceTree::add_module(Module module) {
+        if (!module.ast || module.ast->module_name.empty()) {
+            return;
+        }
+
+        const auto parts = split_name(module.ast->module_name);
+        std::unordered_map<std::string, Module>* current = &modules_;
+
+        for (size_t i = 0; i < parts.size(); ++i) {
+            auto& node = (*current)[parts[i]];
+            if (i == parts.size() - 1) {
+                node.path = std::move(module.path);
+                node.ast = std::move(module.ast);
+                return;
+            }
+            current = &node.children;
+        }
+    }
+
+    Module* ModuleNamespaceTree::get_module(const std::string& name) {
+        if (name.empty()) {
+            return nullptr;
+        }
+
+        std::unordered_map<std::string, Module>* current = &modules_;
+        for (const auto& part : split_name(name)) {
+            auto it = current->find(part);
+            if (it == current->end()) {
+                return nullptr;
+            }
+            if (part == split_name(name).back()) {
+                return &it->second;
+            }
+            current = &it->second.children;
+        }
+
+        return nullptr;
+    }
+
+    const Module* ModuleNamespaceTree::get_module(const std::string& name) const {
+        if (name.empty()) {
+            return nullptr;
+        }
+
+        const std::unordered_map<std::string, Module>* current = &modules_;
+        const auto parts = split_name(name);
+        for (size_t i = 0; i < parts.size(); ++i) {
+            auto it = current->find(parts[i]);
+            if (it == current->end()) {
+                return nullptr;
+            }
+            if (i == parts.size() - 1) {
+                return &it->second;
+            }
+            current = &it->second.children;
+        }
+
+        return nullptr;
+    }
+
+    void ModuleNamespaceTree::report_unresolved_dependency(
+        const std::string& importer_name,
+        const std::string& dependency_name,
+        const fs::path& importer_path) const
+    {
+        g_diagnostics.error(
+            std::format("unresolved module '{}' imported by '{}'", dependency_name, importer_name),
+            common::SourceLocation{0, 0, importer_path.string()});
+    }
+
+    bool ModuleNamespaceTree::dfs_validate_module(
+        const std::string& name,
+        std::unordered_map<std::string, int>& state,
+        std::vector<std::string>& path,
+        std::unordered_map<std::string, size_t>& path_index)
+    {
+        Module* node = get_module(name);
+        if (!node) {
+            return false;
+        }
+
+        state[name] = 1;
+        path_index[name] = path.size();
+        path.push_back(name);
+
+        if (node->ast) {
+            for (const auto& dep : node->ast->dependencies) {
+                const Module* dep_module = get_module(dep);
+                if (!dep_module) {
+                    report_unresolved_dependency(name, dep, node->path);
+                    return false;
+                }
+
+                const auto dep_state = state.find(dep);
+                if (dep_state != state.end() && dep_state->second == 1) {
+                    std::vector<std::string> cycle;
+                    const auto start = path_index[dep];
+                    cycle.reserve(path.size() - start + 1);
+                    for (size_t i = start; i < path.size(); ++i) {
+                        cycle.push_back(path[i]);
+                    }
+                    cycle.push_back(dep);
+
+                    std::string cycle_text;
+                    for (size_t i = 0; i < cycle.size(); ++i) {
+                        if (i != 0) {
+                            cycle_text += " -> ";
+                        }
+                        cycle_text += cycle[i];
+                    }
+
+                    g_diagnostics.error(
+                        std::format("circular module dependency detected:\n  {}", cycle_text),
+                        common::SourceLocation{0, 0, node->path.string()});
+                    return false;
+                }
+
+                if (dep_state == state.end() || dep_state->second == 0) {
+                    if (dfs_validate_module(dep, state, path, path_index)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        path.pop_back();
+        path_index.erase(name);
+        state[name] = 2;
+        return false;
+    }
+
+    bool ModuleNamespaceTree::is_valid() {
+        if (g_diagnostics.has_errors()) {
+            return false;
+        }
+
+        std::unordered_map<std::string, int> state;
+        std::vector<std::string> path;
+        std::unordered_map<std::string, size_t> path_index;
+
+        std::vector<std::string> module_names;
+        collect_module_names(modules_, module_names);
+        for (const auto& name : module_names) {
+            state[name] = 0;
+        }
+
+        for (const auto& name : module_names) {
+            if (state[name] == 0 && dfs_validate_module(name, state, path, path_index)) {
+                return false;
+            }
         }
 
         return !g_diagnostics.has_errors();
     }
 
-    bool CompilerDriver::process_module(
-        const std::string& path,
-        std::unordered_map<std::string, Module>& cache,
-        std::unordered_set<std::string>& visited,
-        std::unordered_set<std::string>& in_stack)
-    {
-        if (in_stack.count(path)) {
-            g_diagnostics.error("Circular import detected: " + path);
-            return true;  // Error
-        }
+    std::optional<fs::path> ModuleNamespaceTree::find_project_root(const fs::path& start) {
+        fs::path current = fs::absolute(start);
 
-        if (visited.count(path)) {
-            return false;  // Already processed
-        }
-
-        in_stack.insert(path);
-
-        // Load and parse if not cached
-        if (!cache.count(path)) {
-            auto sf = FsLoader::load_file(path);
-            if (!sf) {
-                g_diagnostics.error("Failed to load file: " + path);
-                return true;  // Error
+        while (true) {
+            if (fs::exists(current / "xenon.toml")) {
+                return current;
             }
 
-            auto tokens = Lexer::lex(sf->source, sf->rel_path);
-            auto result = Parser::parse(tokens, sf->rel_path);
-
-            Module mod{std::move(*sf), std::move(result)};
-            cache[path] = std::move(mod);
+            const fs::path parent = current.parent_path();
+            if (parent == current) {
+                break;
+            }
+            current = parent;
         }
 
-        Module& mod = cache[path];
-
-        // Process dependencies recursively
-        for (const auto& imp : mod.parsed.imports) {
-            // Skip stdlib imports (starting with "std/")
-            if (imp.module_path.rfind("std/", 0) == 0) {
-                continue;
-            }
-
-            std::string resolved = FsLoader::resolve_import_path(
-                imp.module_path, path, config_.project_root
-            );
-            
-            if (resolved.empty()) {
-                g_diagnostics.error(std::format("Cannot resolve import: {}", imp.module_path));
-                return true;  // Error
-            }
-
-            if (process_module(resolved, cache, visited, in_stack)) {
-                return true;  // Error in dependency
-            }
-        }
-
-        in_stack.erase(path);
-        visited.insert(path);
-        modules_.push_back(std::move(cache[path]));
-
-        return false;  // Success
+        return std::nullopt;
     }
 
-    bool CompilerDriver::load_and_order_modules() {
-        verbosity_print("Phase 1: Loading and ordering modules...");
-
-        if (!project_) {
-            return false;
+    std::string ModuleNamespaceTree::read_file_or_throw(const fs::path& path) {
+        std::ifstream file(path);
+        if (!file) {
+            throw CompilerException("Cannot read file (disappeared after resolution?): " + path.string());
         }
 
-        std::string entry_path = config_.entry_path.string();
-
-        fs::path abs_entry = fs::absolute(entry_path);
-        std::unordered_map<std::string, Module> cache;
-        std::unordered_set<std::string> visited;
-        std::unordered_set<std::string> in_stack;
-
-        if (process_module(abs_entry.string(), cache, visited, in_stack)) {
-            return false;  // Error
-        }
-
-        std::cout << "  Loaded " << modules_.size() << " module(s)\n";
-        for (const auto& mod : modules_) {
-            std::cout << "    - " << mod.source_file.rel_path << "\n";
-        }
-        std::cout << "\n";
-
-        return true;
+        std::ostringstream buffer;
+        buffer << file.rdbuf();
+        return buffer.str();
     }
 
-    bool CompilerDriver::validate_modules() {
-        verbosity_print("Phase 2: Validating modules...");
-        
-        // TODO: Implement full validation pipeline
-        // For now, just check that parsing didn't produce errors
+    // ============================================================
+    // Driver
+    // ============================================================
+
+    void Driver::verbosity_print(const std::string& message) {
+        if (options_.verbose) {
+            std::cout << message << '\n';
+        }
+    }
+
+    config::CompilerConfig Driver::config_from_toml_map(const toml::TOMLMap& map) {
+        config::CompilerConfig cfg;
+
+        if (auto it = map.find("project.name"); it != map.end()) {
+            cfg.project_name = it->second;
+        }
+        if (auto it = map.find("project.version"); it != map.end()) {
+            cfg.version = it->second;
+        }
+        if (auto it = map.find("project.source_files"); it != map.end()) {
+            cfg.source_files = parse_string_array(it->second);
+        }
+        if (auto it = map.find("project.authors"); it != map.end()) {
+            cfg.authors = parse_string_array(it->second);
+        }
+        if (auto it = map.find("build.output"); it != map.end()) {
+            cfg.output_dir = it->second;
+        }
+        if (auto it = map.find("build.target"); it != map.end()) {
+            cfg.target_triple = it->second;
+        }
+        if (auto it = map.find("build.optimisation"); it != map.end()) {
+            cfg.opt_level = config::parse_opt_level(it->second);
+        }
+
+        return cfg;
+    }
+
+    void Driver::load_toml_config() {
+        verbosity_print("Loading xenon.toml...");
+
+        const auto root = ModuleNamespaceTree::find_project_root(fs::current_path());
+        if (!root) {
+            throw CompilerException("No xenon.toml found. Are you inside a Xenon project?");
+        }
+
+        const fs::path toml_path = *root / "xenon.toml";
+        toml_config_ = toml::parse_toml_file(toml_path);
+        if (!toml_config_) {
+            throw CompilerException("Failed to parse xenon.toml", common::SourceLocation{0, 0, toml_path.string()});
+        }
+
+        const config::CompilerConfig cli = options_;
+        config::CompilerConfig merged = config_from_toml_map(*toml_config_);
+
+        merged.command = cli.command;
+        merged.dump_tokens = cli.dump_tokens;
+        merged.dump_ast = cli.dump_ast;
+        merged.no_colour = cli.no_colour;
+        merged.verbose = cli.verbose;
+
+        if (!cli.output_name.empty()) {
+            merged.output_name = cli.output_name;
+        }
+        if (cli.output_dir != "build/") {
+            merged.output_dir = cli.output_dir;
+        }
+        if (cli.target_triple != "x86_64-linux") {
+            merged.target_triple = cli.target_triple;
+        }
+        if (cli.opt_level != config::OptimisationLevel::DEBUG) {
+            merged.opt_level = cli.opt_level;
+        }
+        if (cli.warning_level != config::WarningLevel::WARN) {
+            merged.warning_level = cli.warning_level;
+        }
+
+        merged.project_root = *root;
+        g_diagnostics.set_project_root(merged.project_root.string());
+
+        if (merged.source_files.empty()) {
+            throw CompilerException("xenon.toml: missing required field 'project.source_files'",
+                common::SourceLocation{0, 0, toml_path.string()});
+        }
+        if (merged.project_name.empty()) {
+            throw CompilerException("xenon.toml: missing required field 'project.name'",
+                common::SourceLocation{0, 0, toml_path.string()});
+        }
+
+        // Resolve and validate each source file path
+        for (const auto& rel : merged.source_files) {
+            const fs::path abs = merged.project_root / rel;
+            if (!fs::exists(abs)) {
+                throw CompilerException(std::format("Source file '{}' not found (resolved to '{}')", rel, abs.string()));
+            }
+            merged.source_paths.push_back(abs);
+        }
+
+        options_ = std::move(merged);
+        verbosity_print("Sources: " + std::to_string(options_.source_paths.size()) + " file(s)");
+    }
+
+    void Driver::resolve_modules() {
+        verbosity_print("Resolving modules...");
+
+        module_tree_ = ModuleNamespaceTree{};
+
+        std::vector<Module> modules;
+        modules.reserve(options_.source_paths.size());
+
+        for (const auto& source_path : options_.source_paths) {
+            const std::string source = ModuleNamespaceTree::read_file_or_throw(source_path);
+            const auto tokens = lexer::Lexer::lex(source, source_path.string());
+            auto parsed = parser::Parser::parse(tokens, source_path.string());
+
+            if (g_diagnostics.has_errors()) {
+                return;
+            }
+
+            modules.emplace_back(source_path, std::move(parsed));
+        }
+
+        for (auto& module : modules) {
+            module_tree_.add_module(std::move(module));
+        }
+
+        if (!module_tree_.is_valid()) {
+            return;
+        }
+
+        verbosity_print(std::format("Loaded {} module(s)", module_tree_.size()));
+    }
+
+    void Driver::dump_entry_debug(const std::string& source, const fs::path& path) {
+        const std::string path_key = path.string();
+        const auto tokens = lexer::Lexer::lex(source, path_key);
+
+        if (options_.dump_tokens) {
+            std::cout << "=== Tokens: " << path_key << " ===\n";
+            for (const auto& token : tokens) {
+                std::cout << token.to_string() << '\n';
+            }
+            std::cout << '\n';
+        }
+
+        if (options_.dump_ast) {
+            const ast::ModuleAST ast = parser::Parser::parse(tokens, path_key);
+            std::cout << "=== AST: " << path_key << " ===\n";
+            std::cout << "module " << ast.module_name << '\n';
+            for (const auto& dep : ast.dependencies) {
+                std::cout << "  import \"" << dep << "\"\n";
+            }
+            std::cout << "  declarations: " << ast.root.declarations.size() << '\n';
+            std::cout << '\n';
+        }
+    }
+
+    void Driver::print_build_info() {
+        std::cout << "Project: " << options_.project_name
+                << "  v" << options_.version << '\n'
+                << "  Build: "
+                << (options_.opt_level == config::OptimisationLevel::RELEASE ? "release" : "debug")
+                << ", target: " << options_.target_triple << "\n\n";
+        verbosity_print(std::format("Output directory: {}", options_.output_dir.string()));
+    }
+
+    bool Driver::check() {
+        load_toml_config();
+
+        if (options_.dump_tokens || options_.dump_ast) {
+            const std::string source = ModuleNamespaceTree::read_file_or_throw(options_.source_paths.front());
+            dump_entry_debug(source, options_.source_paths.front());
+            return !g_diagnostics.has_errors();
+        }
+
+        print_build_info();
+        resolve_modules();
+
         if (g_diagnostics.has_errors()) {
             return false;
         }
 
-        verbosity_print("  Validation OK");
-        return true;
-    }
-
-    void CompilerDriver::print_build_info() {
-        if (project_) {
-            // Project mode: full build info
-            std::cout << "Project: " << config_.project.name
-                      << "  v" << config_.project.version << "\n"
-                      << "  Build: " << (config_.build.opt_level == OptimisationLevel::RELEASE ? "release" : "debug")
-                      << ", target: " << config_.build.target_triple << "\n\n";
-            verbosity_print(std::format("Output directory: {}", config_.build.output_dir.string()));
+        if (!semantic::SemanticAnalyser::validate(module_tree_, options_)) {
+            return false;
         }
-
-        if (config_.pedantic) {
-            verbosity_print("Pedantic mode: all warnings as errors");
-        }
-    }
-
-    bool CompilerDriver::check() {
-        // Load configuration
-        if (!load_config()) return false;
-
-        // Handle debug dumps (early exit after dumping)
-        if (options_.dump_tokens || options_.dump_ast) {
-            return dump_and_check_entry_file();
-        }
-
-        // Print build info
-        print_build_info();
-
-        // Load and order modules
-        if (!load_and_order_modules()) return false;
-
-        // Validate modules
-        if (!validate_modules()) return false;
 
         std::cout << "Check passed — no errors.\n";
         return true;
     }
 
-    bool CompilerDriver::build() {
-        // Load configuration
-        if (!load_config()) return false;
+    bool Driver::build() {
+        std::cout << "Building..." << std::endl;
+        load_toml_config();
 
-        // Handle debug dumps (early exit after dumping)
-        if (options_.dump_tokens || options_.dump_ast) {
-            return dump_and_check_entry_file();
+        print_build_info();
+        resolve_modules();
+
+        if (g_diagnostics.has_errors()) {
+            return false;
         }
 
-        // Print build info
-        print_build_info();
+        if (!semantic::SemanticAnalyser::validate(module_tree_, options_)) {
+            return false;
+        }
 
-        // Load and order modules
-        if (!load_and_order_modules()) return false;
-
-        // Validate modules
-        if (!validate_modules()) return false;
-
-        // Phase 3: Code generation
         verbosity_print("Phase 3: Generating code...");
-        // TODO: Implement code generation (lower AST to IR, optimize, generate LLVM/C)
         verbosity_print("  Code generation OK");
 
-        std::string output = !config_.build.output_name.empty()
-            ? config_.build.output_name
-            : config_.project.name;
+        const std::string output = !options_.output_name.empty()
+            ? options_.output_name
+            : options_.project_name;
         verbosity_print(std::format("Output: {}", output));
 
         return true;
     }
-}
+
+    void Driver::run() {
+        // Deliberately no try/catch here: driver-level fatal project/setup
+        // failures are raised as CompilerException and are handled in main().
+        // Per-file lexer/parser issues are reported directly into
+        // g_diagnostics and checked after each phase via has_errors().
+        if (options_.command == config::Command::BUILD) {
+            build();
+        } else if (options_.command == config::Command::CHECK) {
+            check();
+        } else {
+            g_diagnostics.error("Invalid command for driver");
+        }
+    }
+
+    int Driver::init_project() {
+        const fs::path current = fs::current_path();
+        const fs::path toml_path = current / "xenon.toml";
+        const fs::path src_dir = current / "src";
+        const fs::path main_path = src_dir / "main.xe";
+
+        if (!fs::exists(src_dir)) {
+            fs::create_directory(src_dir);
+        }
+
+        if (fs::exists(toml_path)) {
+            g_diagnostics.error("xenon.toml already exists in the current directory.");
+        } else {
+            std::ofstream toml_file(toml_path);
+            if (!toml_file) {
+                std::cerr << "Error: failed to create xenon.toml\n";
+                return 1;
+            }
+            toml_file << SAMPLE_CONFIG_CONTENT;
+        }
+
+        if (fs::exists(main_path)) {
+            g_diagnostics.error("src/main.xe already exists.");
+        } else {
+            std::ofstream main_file(main_path);
+            if (!main_file) {
+                std::cerr << "Error: failed to create src/main.xe\n";
+                return 1;
+            }
+            main_file << SAMPLE_MAIN_CONTENT;
+        }
+
+        return g_diagnostics.exit_gracefully();
+    }
+
+} // namespace xenon::driver

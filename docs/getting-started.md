@@ -25,7 +25,7 @@ xec --help
 
 You can compile or validate a single file without an `xenon.toml` project.
 
-Create `hello.ar`:
+Create `hello.xe`:
 
 ```xenon
 func main() -> i32 {
@@ -37,14 +37,14 @@ func main() -> i32 {
 Compile or validate directly:
 
 ```bash
-xec hello.ar
-xec check hello.ar
+xec hello.xe
+xec check hello.xe
 ```
 
 Run a single file with `xec run`:
 
 ```bash
-xec run hello.ar
+xec run hello.xe
 ```
 
 > Note: the compiler currently parses and validates input. Full code generation and executable output are still under development.
@@ -61,7 +61,7 @@ xec init hello_world
 
 For info on `xenon.toml`, see [Xenon Build Config](compiler/xenon-toml.md)
 
-Create `src/main.ar`:
+Create `src/main.xe`:
 
 ```xenon
 func main() -> i32 {

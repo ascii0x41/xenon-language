@@ -1,114 +1,63 @@
 #pragma once
 
 #include "common/dataclasses.h"
-#include "common/diagnostics.h"
 #include "tokens/tokens.h"
 #include "ast/astlib.h"
+#include "common/diagnostics.h"
 
-#include <vector>
 #include <string>
-#include <unordered_map>
 
-namespace xenon {
+namespace xenon::parser {
+
+    using tokens::Token;
+    using tokens::TokenType;
+    using tokens::TokenStream;
+    using common::SourceLocation;
+    using namespace ast;
 
     class Parser {
     public:
-
-        static ParserResult parse(const TokenStream& tokens, std::string filepath) {
+        static ModuleAST parse(const TokenStream& tokens, std::string filepath) {
             return Parser(tokens, std::move(filepath)).parse();
         }
-
     private:
-        // -- State ----------------------------------------------------------------
+        explicit Parser(const TokenStream& tokens, std::string filepath)
+            : tokens_(tokens), filepath_(std::move(filepath)) {}
+
+        ModuleAST parse();
+
+        // -- Tokens ---------------------------------------------------------------
         const TokenStream& tokens_;
         std::string filepath_;
-        size_t idx_ = 0;
-        bool   had_errors_  = false;
-        size_t error_count_ = 0;
-        static constexpr size_t MAX_ERRORS = 20;
+        size_t current_ = 0;
 
-        std::vector<ImportDecl> imports_;
-        std::vector<ExportDecl> exports_;
+        inline SourceLocation loc() { return current_ < tokens_.size() ? tokens_[current_].location : tokens_.back().location; }
+        inline bool is_at_end() const {
+            return current_ >= tokens_.size() ||
+                   (current_ < tokens_.size() && tokens_[current_].type == TokenType::EOF_TOKEN);
+        }
+        inline const Token& peek() const {
+            return current_ < tokens_.size() ? tokens_[current_] : tokens_.back();
+        }
+        inline const Token& peek_next() const {
+            return current_ + 1 < tokens_.size() ? tokens_[current_ + 1] : tokens_.back();
+        }
+        inline const Token& advance() { return tokens_[current_++]; }
+        const Token& previous() const { return tokens_[current_ - 1]; }
+        bool match(TokenType kind);
+        bool check(TokenType kind) const;
+        bool accept(TokenType kind);
+        Token expect(TokenType kind, const std::string& msg);
+
+        // -- AST Construction ------------------------------------------------------
         
-        // Track enclosing scopes so synchronise() doesn't steal their closing delimiters
-        std::vector<TokenType> expected_close_delims_;
-
-        // Single-token buffer for splitting >> into > >
-        bool  split_gt_pending_ = false;
-        const Token split_gt_token_{ TokenType::EOF_TOKEN, "", {0, 0, ""}};
-
-        explicit Parser(const TokenStream& tokens, std::string filepath)
-        : tokens_(tokens), filepath_(std::move(filepath)) {}
-
-        // Parse the full token stream into a top-level block.
-        ParserResult parse();
-
-        // -- Navigation -----------------------------------------------------------
-
-        const Token& peek() const;
-        const Token& peek_next() const;
-        const Token& previous() const;
-        bool is_at_end() const;
-        Token advance();
-        Token expect(TokenType type, const char* msg);
-        bool accept(TokenType type);
-        SourceLocation get_location() const;
-
-        // -- Error recovery -------------------------------------------------------
-
-        // Hard error: report and synchronise (for truly unexpected tokens)
-        void report_and_synchronise(const CompilerException& e);
-        
-        // Hard error with stop delimiter: don't consume the delimiter
-        void report_and_synchronise(const CompilerException& e, TokenType stop_delim);
-        
-        // synchronise without consuming the stop delimiter
-        void synchronise(TokenType stop_delim);
-        
-        // Top-level synchronise (no delimiter)
-        void synchronise();
-        
-        // Soft recovery: skip to next statement boundary without stack unwinding
-        void recover_to_next_statement();
-        
-        // Soft expect for semicolons: report if missing, recover locally
-        bool expect_semicolon(const char* context_msg);
-
-        // -- >> disambiguation ----------------------------------------------------
-
-        void consume_gt_gt_as_gt();
-        void close_angle(const char* msg);
-
-        // -- Directives -----------------------------------------------------------
-
-        Directives parse_directives();
-
-        // -- Operator helpers -----------------------------------------------------
-
-        BinaryOp token_to_binary_op(TokenType t) const;
-        UnaryOp token_to_unary_op(TokenType t) const;
-//      OverloadableOp token_to_overloadable_op(TokenType t, bool is_unary) const;
-
-        // -- Type parsing ---------------------------------------------------------
-
-        TypePtr parse_type();
-        std::vector<TypePtr> parse_type_args();
-
-        // -- Generic parameter/argument parsing -----------------------------------
-
-        GenericParameters parse_generic_params();
-        GenericArguments parse_generic_arguments();
-        std::vector<TraitConstraint> parse_trait_bounds();
-
-        // -- Parameter parsing ----------------------------------------------------
-
-        Parameters parse_parameters();
-
-        // -- Name parsing ---------------------------------------------------------
-
         NamePtr parse_name();
+        TypeExprPtr parse_type_expression();
 
-        // -- Expression parsing ---------------------------------------------------
+        std::vector<ExpressionPtr> parse_arguments();
+        std::vector<VariableDeclPtr> parse_parameters();
+
+        // -- Expression parsing ----------------------------------------------------
         //
         // Precedence (low -> high):
         //   assignment    =  +=  -=  *=  /=  %=  &=  |=  ^=  ~=  <<=  >>=
@@ -147,77 +96,37 @@ namespace xenon {
         // -- Primary helpers ------------------------------------------------------
 
         ExpressionPtr parse_array_literal();
-        ExpressionPtr parse_map_literal();
-        ExpressionPtr parse_tuple_literal();
-        ExpressionPtr parse_interp_string();
-        ExpressionPtr parse_new_expr();       // 'new' already consumed
-        ExpressionPtr parse_lambda();         // 'lambda' already consumed
-        ExpressionPtr parse_group_or_tuple(); // '(' already consumed, disambiguates
+        ExpressionPtr parse_new_expr();
+        ExpressionPtr parse_class_literal(SourceLocation l, NamePtr struct_name);
+//        ExpressionPtr parse_box_expr();
 
-        // -- Call argument parsing ------------------------------------------------
+        // -- Statements -----------------------------------------------------------
 
-        std::vector<ExpressionPtr> parse_call_args();
-
-        // -- Lookahead heuristics ------------------------------------------------
-
-        bool looks_like_generic_args(const ExpressionPtr& lhs) const;
-
-        // -- Statement parsing ----------------------------------------------------
-
-        ConstructPtr parse_statement();
+        DeclarationPtr parse_declaration();
+        StatementPtr parse_statement();
         BlockPtr parse_block();
 
-        // -- Declaration parsing --------------------------------------------------
+        StatementPtr parse_if_statement();
+        StatementPtr parse_while_statement();
+        // StatementPtr parse_foreach_statement();
 
-        Ptr<VariableDecl> parse_variable_decl(bool is_mutable, bool is_static, Directives dirs);
-//      Ptr<DestructureDecl> parse_destructure_decl(bool is_mutable, Directives dirs);
+        VariableDeclPtr parse_variable_declaration(bool is_public = false);
+        FunctionDeclPtr parse_function_declaration(bool is_public = false);
+        OperatorOverloadDeclPtr parse_operator_overload_declaration(bool is_public = false);
 
-        Ptr<FunctionDecl> parse_function_decl(bool is_static, bool is_mut, Directives dirs);
-//      Ptr<OperatorOverloadDecl> parse_operator_overload(bool is_mut, Directives dirs);
-        Ptr<ClassDecl> parse_class_decl(Directives dirs);
-        Ptr<TraitDecl> parse_trait_decl(Directives dirs);
-        Ptr<ImplDecl> parse_impl_decl(Directives dirs);
-        Ptr<TypeAliasDecl> parse_type_alias_decl(Directives dirs);
-        Ptr<EnumDecl> parse_enum_decl(Directives dirs);
-//      Ptr<ScopeDecl> parse_scope_decl(Directives dirs);
+        ClassFieldDeclPtr parse_class_field_declaration(bool is_public = false);
+        ClassMethodDeclPtr parse_class_method_declaration(bool is_public = false, bool is_static = false);
+        NamespaceVarDeclPtr parse_namespace_var_declaration(bool is_public = false);
 
-        // -- Control flow ---------------------------------------------------------
+        ClassStructureDeclPtr parse_class_structure_declaration(bool is_public = false);
+        ClassImplementationDeclPtr parse_class_implementation_declaration();
 
-        ConstructPtr parse_if_stmt();
-        ConstructPtr parse_while_stmt();
-        ConstructPtr parse_do_while_stmt();
-        ConstructPtr parse_foreach_stmt();
-        ConstructPtr parse_match_stmt();
+        // -- Headers --------------------------------------------------------------
 
-        // -- Heap deallocation ---------------------------------------------------------
-
-        ConstructPtr parse_delete_stmt();
-
-        // -- Exception handling ---------------------------------------------------
-
-        ConstructPtr parse_try_catch_stmt();
-        ConstructPtr parse_throw_stmt();
-
-        // -- Jump statements ------------------------------------------------------
-
-        ConstructPtr parse_return_stmt();
-        ConstructPtr parse_break_stmt();
-        ConstructPtr parse_continue_stmt();
-
-        // -- Module system --------------------------------------------------------
-
-        void parse_import_decl();    // side-effects imports_ vector
-        void parse_export_decl();    // side-effects exports_ vector
-        void parse_module_decl();    // side-effects: consumes module declaration line
-
-        std::string parse_operator_name(SourceLocation& op_loc);
-        OverloadableOp resolve_overloadable_op(const std::string& op_name) const;
-        bool looks_like_generic_args_ahead() const;
+        std::string parse_module_name(); // parse the module name
+        std::vector<std::string> parse_dependencies(); // parse the dependencies of the module
         
-        // -- Scope tracking helpers -----------------------------------------------
-        
-        void enter_scope(TokenType close_delim);
-        void leave_scope();
+        void parse_header(ModuleAST& ast); // parse the header of the module, including module name and dependencies
     };
-
+     
 } // namespace xenon

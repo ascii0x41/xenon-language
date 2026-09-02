@@ -1,235 +1,73 @@
 #pragma once
 
-#include "common/dataclasses.h"
-#include <string>
+#include <memory>
 #include <vector>
-#include <optional>
-#include <variant>
+#include <string>
 
-namespace xenon {
+#include "common/dataclasses.h"
 
-    enum class BinaryOp {
-        ADD,
-        SUBTRACT,
-        MULTIPLY,
-        DIVIDE,
-        MODULO,
-        BITWISE_AND,
-        BITWISE_OR,
-        BITWISE_XOR,
-        LEFT_SHIFT,
-        RIGHT_SHIFT,
-        EQUAL,
-        NOT_EQUAL,
-        LESS,
-        LESS_EQUAL,
-        GREATER,
-        GREATER_EQUAL,
-        ASSIGN,
-        ADD_ASSIGN,
-        SUBTRACT_ASSIGN,
-        MULTIPLY_ASSIGN,
-        DIVIDE_ASSIGN,
-        MODULO_ASSIGN,
-        BITWISE_AND_ASSIGN,
-        BITWISE_OR_ASSIGN,
-        BITWISE_XOR_ASSIGN,
-        LEFT_SHIFT_ASSIGN,
-        RIGHT_SHIFT_ASSIGN,
-        INDEX,
-        FUNCTION_CALL,
-        LOGICAL_AND,
-        LOGICAL_OR
-    };
+namespace xenon::ast {
 
-    enum class UnaryOp {
-        UNARY_PLUS,
-        UNARY_MINUS,
-        LOGICAL_NOT,
-        BITWISE_NOT,
-        ADDRESS_OF,
-        DEREFERENCE,
-    };
+    using common::SourceLocation;
 
-    /**
-     * Notes:
-     *  - +, -, +, /, and % can return any type, but typically return the same type as their operands (e.g. int + int -> int, but int + float -> float)
-     *  - ==, !=, <, <=, >, and >= must return bool, but can take any operand types (e.g. int == int -> bool, but int == string -> bool)
-     *  [] is for rvalues (indexing) and []= is for lvalues (index assignment)
-     */
-    enum class OverloadableOp {
-        // Unary (must return Self except NOT)
-        UNARY_PLUS,   // operator+() -> Self
-        UNARY_MINUS,  // operator-() -> Self
-        BITWISE_NOT,  // operator~() -> Self
-        
-        // Note: LOGICAL_NOT (!) is NOT overloadable – only works on bool
-
-        // Binary arithmetic (can return any type, but typically Self)
-        ADD,        // operator+(other) -> Self
-        SUBTRACT,   // operator-(other) -> Self
-        MULTIPLY,   // operator*(other) -> Self
-        DIVIDE,     // operator/(other) -> Self
-        MODULO,     // operator%(other) -> Self
-        
-        // Bitwise (return Self)
-        BITWISE_AND,  // operator&(other) -> Self
-        BITWISE_OR,   // operator|(other) -> Self
-        BITWISE_XOR,  // operator^(other) -> Self
-        LEFT_SHIFT,   // operator<<(other) -> Self
-        RIGHT_SHIFT,  // operator>>(other) -> Self
-        
-        // Comparisons (must return bool)
-        EQUAL,         // operator==(other) -> bool
-        NOT_EQUAL,     // operator!=(other) -> bool
-        LESS,          // operator<(other) -> bool
-        LESS_EQUAL,    // operator<=(other) -> bool
-        GREATER,       // operator>(other) -> bool
-        GREATER_EQUAL, // operator>=(other) -> bool
-        
-        // Compound assignment (return mut ref Self)
-        ADD_ASSIGN,         // operator+=(other) -> mut ref Self
-        SUBTRACT_ASSIGN,    // operator-=(other) -> mut ref Self
-        MULTIPLY_ASSIGN,    // operator*=(other) -> mut ref Self
-        DIVIDE_ASSIGN,      // operator/=(other) -> mut ref Self
-        MODULO_ASSIGN,      // operator%=(other) -> mut ref Self
-        BITWISE_AND_ASSIGN,   // operator&=(other) -> mut ref Self
-        BITWISE_OR_ASSIGN,    // operator|=(other) -> mut ref Self
-        BITWISE_XOR_ASSIGN,   // operator^=(other) -> mut ref Self
-        LEFT_SHIFT_ASSIGN,    // operator<<=(other) -> mut ref Self
-        RIGHT_SHIFT_ASSIGN,   // operator>>=(other) -> mut ref Self
-        
-        // Indexing (separate read/write)
-        INDEX_READ,   // operator[](index) -> ref T
-        INDEX_WRITE,  // operator[]=(index) -> mut ref T
-    };
-
-    constexpr std::array<std::pair<std::string_view, OverloadableOp>, 3> string_to_unary_overloadable_op = {{
-        // Unary
-        {"+", OverloadableOp::UNARY_PLUS},
-        {"-", OverloadableOp::UNARY_MINUS},
-        {"~", OverloadableOp::BITWISE_NOT},
-    }};
-
-    constexpr std::array<std::pair<std::string_view, OverloadableOp>, 30> string_to_binary_overloadable_op = {{
-        // Binary arithmetic
-        {"+", OverloadableOp::ADD},
-        {"-", OverloadableOp::SUBTRACT},
-        {"*", OverloadableOp::MULTIPLY},
-        {"/", OverloadableOp::DIVIDE},
-        {"%", OverloadableOp::MODULO},
-
-        // Bitwise
-        {"&", OverloadableOp::BITWISE_AND},
-        {"|", OverloadableOp::BITWISE_OR},
-        {"^", OverloadableOp::BITWISE_XOR},
-        {"<<", OverloadableOp::LEFT_SHIFT},
-        {">>", OverloadableOp::RIGHT_SHIFT},
-
-        // Comparisons
-        {"==", OverloadableOp::EQUAL},
-        {"!=", OverloadableOp::NOT_EQUAL},
-        {"<", OverloadableOp::LESS},
-        {"<=", OverloadableOp::LESS_EQUAL},
-        {">", OverloadableOp::GREATER},
-        {">=", OverloadableOp::GREATER_EQUAL},
-
-        // Compound assignment
-        {"+=", OverloadableOp::ADD_ASSIGN},
-        {"-=", OverloadableOp::SUBTRACT_ASSIGN},
-        {"*=", OverloadableOp::MULTIPLY_ASSIGN},
-        {"/=", OverloadableOp::DIVIDE_ASSIGN},
-        {"%=", OverloadableOp::MODULO_ASSIGN},
-        {"&=", OverloadableOp::BITWISE_AND_ASSIGN},
-        {"|=", OverloadableOp::BITWISE_OR_ASSIGN},
-        {"^=", OverloadableOp::BITWISE_XOR_ASSIGN},
-        {"<<=", OverloadableOp::LEFT_SHIFT_ASSIGN},
-        {">>=", OverloadableOp::RIGHT_SHIFT_ASSIGN},
-
-        // Indexing
-        {"[]", OverloadableOp::INDEX_READ},
-        {"[]=", OverloadableOp::INDEX_WRITE},
-    }};
-
-
-
-    // Base AST node kind
     struct ASTNode {
-        enum class NodeKind {
-            // -- Type -----------------------------------------------------------------
-            TYPE,
-
-            // -- Literals -------------------------------------------------------------
+       enum class NodeKind {
+            // Literals
             LITERAL_INT,
             LITERAL_FLOAT,
             LITERAL_COMPLEX,
             LITERAL_STRING,
-            LITERAL_RAW_STRING,
-            LITERAL_INTERP_STRING,
             LITERAL_BOOL,
             LITERAL_ARRAY,
-            LITERAL_TUPLE,
-            LITERAL_MAP,
             LITERAL_NULLPTR,
+            LITERAL_CLASS,
 
-            // -- Names / Access -------------------------------------------------------
+            // Names / Access
             NAME,
             MEMBER_ACCESS_EXPR,
             CALL_EXPR,
             INDEX_EXPR,
 
-            // -- Operations -----------------------------------------------------------
-            BINARY_EXPR,
-            UNARY_EXPR,
+            // Type Expressiosn
+            NAMED_TYPE,
+            POINTER_TYPE,
+            REFERENCE_TYPE,
+            ARRAY_TYPE,
+
+            // Operations
+            OPERATION_EXPR,
             TERNARY_EXPR,
 
-            // -- Allocation -----------------------------------------------------------
+            // Allocation
             NEW_EXPR,
+            BOX_EXPR,
             DELETE_STMT,
 
-            // -- Lambda ---------------------------------------------------------------
-            LAMBDA_EXPR,
-
-            // -- Statements -----------------------------------------------------------
+            // Statements
             BLOCK_STMT,
             EXPRESSION_STMT,
 
             // Control flow
             IF_STMT,
-            IF_LET_STMT,        // if let binding = opt { ... }
             WHILE_STMT,
-            DO_WHILE_STMT,
             FOREACH_STMT,
-            MATCH_STMT,
 
             // Jump
             RETURN_STMT,
             BREAK_STMT,
             CONTINUE_STMT,
-            THROW_STMT,
 
-            // Exceptions
-            TRY_CATCH_STMT,
-
-            // -- Declarations ---------------------------------------------------------
+            // Declarations
             VARIABLE_DECL,
-            DESTRUCTURE_DECL,   // let (a, b) = ...
             FUNCTION_DECL,
-            CONSTRUCTOR_DECL,
-            DESTRUCTOR_DECL,
-//          OPERATOR_OVERLOAD_DECL,
-            CLASS_DECL,
-            IMPL_DECL,
-            TRAIT_DECL,
-            TYPE_ALIAS_DECL,
-            ENUM_DECL,
-//          SCOPE_DECL,
-
-            // -- Module ---------------------------------------------------------------
-            IMPORT_DECL,
-            EXPORT_DECL,
-
-            // -- Special --------------------------------------------------------------
+            OPERATOR_OVERLOAD_DECL,
+            CLASS_FIELD_DECL,
+            NAMESPACE_VARIABLE_DECL,
+            CLASS_METHOD_DECL,
+            CLASS_STRUCTURE_DECL,
+            CLASS_IMPLEMENTATION_DECL,
+            
+            // Special
             EOF_STMT,
         } kind;
         SourceLocation location;
@@ -238,243 +76,69 @@ namespace xenon {
     };
 
     // Selection, Iteration, and Sequence
-    struct Construct : public ASTNode {
-        explicit Construct(NodeKind k, SourceLocation l)
+    struct Statement : public ASTNode {
+        explicit Statement(NodeKind k, SourceLocation l)
             : ASTNode(k, l) {}
     };
 
-    using ConstructPtr = Ptr<Construct>;
+    using StatementPtr = std::unique_ptr<Statement>;
 
-    // variable, function, class, enum, type alias, and trait declares
-    struct Declaration : public Construct {
+    // variable, function declarations, etc.
+    struct Declaration : public Statement {
         explicit Declaration(NodeKind k, SourceLocation l)
-            : Construct(k, l) {}
+            : Statement(k, l) {}
     };
 
-    using DeclarationPtr = Ptr<Declaration>;
+    using DeclarationPtr = std::unique_ptr<Declaration>;
 
+    // L and R values, expressions, etc.
     struct Expression : public ASTNode {
         explicit Expression(NodeKind k, SourceLocation l)
             : ASTNode(k, l) {}
     };
 
-    using ExpressionPtr = Ptr<Expression>;
+    using ExpressionPtr = std::unique_ptr<Expression>;
 
-    // --- Forward declarations for mutual references ---
-    struct Name;
-    struct FunctionDecl;
-    struct ClassDecl;
-    struct ConstructorDecl;
-    struct DestructorDecl;
-    struct VariableDecl;
 
-    // ============================================================================
-    // TYPE SYSTEM (separated from AST)
-    // ============================================================================
+    // -- Literals ---------------------------------------------------------------
 
-    struct Type {
-        enum class TypeKind {
-            VALUE,
-            RAW_PTR,
-            BOX_PTR,
-            REF,
-            CALLABLE,
-            STATIC_ARRAY,
-            DYNAMIC_ARRAY
-        } kind;
-        SourceLocation location;
-        explicit Type(TypeKind k, SourceLocation l): kind(k), location(std::move(l)) {}
-        virtual ~Type() = default;
-    };
+    enum class NumericSuffix { NONE, I8, I16, I32, I64, U8, U16, U32, U64, SIZE, F32, F64 };
 
-    using TypePtr = Ptr<Type>;
-    using NamePtr = Ptr<Name>;
+    inline NumericSuffix parse_integer_suffix(const std::string& suf) {
+        if (suf == "i8")   return NumericSuffix::I8;
+        if (suf == "i16")  return NumericSuffix::I16;
+        if (suf == "i32")  return NumericSuffix::I32;
+        if (suf == "i64")  return NumericSuffix::I64;
+        if (suf == "u8")   return NumericSuffix::U8;
+        if (suf == "u16")  return NumericSuffix::U16;
+        if (suf == "u32")  return NumericSuffix::U32;
+        if (suf == "u64")  return NumericSuffix::U64;
+        if (suf == "size") return NumericSuffix::SIZE;
+        return NumericSuffix::NONE;
+    }
 
-    // T<Args...>
-    struct ValueType : public Type {
-        NamePtr name;
-        explicit ValueType(SourceLocation l, NamePtr n_)
-            : Type(TypeKind::VALUE, std::move(l)), name(std::move(n_)) {}
-    };
-
-    // (mut) ptr T
-    struct RawPointerType : public Type {
-        TypePtr inner_type;
-        bool is_mut;
-        explicit RawPointerType(SourceLocation l, TypePtr t_, bool m_ = false)
-            : Type(TypeKind::RAW_PTR, std::move(l)), inner_type(std::move(t_)), is_mut(m_) {}
-    };
-
-    // (mut) box T
-    struct BoxPointerType : public Type {
-        TypePtr inner_type;
-        bool is_mut;
-        explicit BoxPointerType(SourceLocation l, TypePtr t_, bool m_ = false)
-            : Type(TypeKind::BOX_PTR, std::move(l)), inner_type(std::move(t_)), is_mut(m_) {}
-    };
-
-    // (mut) ref T
-    struct ReferenceType : public Type {
-        TypePtr inner_type;
-        bool is_mut;
-        explicit ReferenceType(SourceLocation l, TypePtr t_, bool m_ = false)
-            : Type(TypeKind::REF, std::move(l)), inner_type(std::move(t_)), is_mut(m_) {}
-    };
-
-    // (T1, T2) -> Ret
-    struct CallableType : public Type {
-        TypePtr return_t;
-        std::vector<TypePtr> param_t;
-        explicit CallableType(SourceLocation l, TypePtr rt_, std::vector<TypePtr> pt_)
-            : Type(TypeKind::CALLABLE, std::move(l)), return_t(std::move(rt_)), param_t(std::move(pt_)) {}
-    };
-
-    // [T; N]
-    struct StaticArrayType : public Type {
-        TypePtr item_t;
-        ExpressionPtr size_expr;
-        explicit StaticArrayType(SourceLocation l, TypePtr it_, ExpressionPtr sx_)
-            : Type(TypeKind::STATIC_ARRAY, std::move(l)), item_t(std::move(it_)), size_expr(std::move(sx_)) {}
-    };
-
-    // [T]
-    struct DynamicArrayType : public Type {
-        TypePtr item_t;
-        explicit DynamicArrayType(SourceLocation l, TypePtr it_)
-            : Type(TypeKind::DYNAMIC_ARRAY, std::move(l)), item_t(std::move(it_)) {}
-    };
-
-    // ============================================================================
-    // GENERICS / TRAITS
-    // ============================================================================
-
-    using GenericArg = std::variant<ExpressionPtr, TypePtr>;
-
-    struct GenericArguments {
-        std::vector<GenericArg> params;
-        SourceLocation open_bracket_loc;   // <
-        SourceLocation close_bracket_loc;  // >
-
-        bool empty() const { return params.empty(); }
-    };
-
-    struct Name : public Expression {
-        std::string base;
-        GenericArguments generics;
-        NamePtr next = nullptr;   // "::" chain
-
-        Name(SourceLocation l, std::string n_, GenericArguments g_ = {}, NamePtr nxt_ = nullptr)
-            : Expression(NodeKind::NAME, l), base(std::move(n_)), generics(std::move(g_)), next(std::move(nxt_)) {}
-
-        bool is_simple() const { return next == nullptr && generics.empty(); }
-        std::string format() const {
-            std::string s = base;
-            if (!generics.empty()) { /* ... */ }
-            if (next) s += "::" + next->format();
-            return s;
-        }
-    };
-
-    struct TraitConstraint {
-        std::string   trait_name;
-        GenericArguments   type_args;
-        explicit TraitConstraint(std::string name, GenericArguments args = {})
-            : trait_name(std::move(name)), type_args(std::move(args)) {}
-    };
-
-    struct GenericParam {
-        std::string                  name;
-        std::vector<TraitConstraint> bounds;
-        explicit GenericParam(std::string n, std::vector<TraitConstraint> b = {})
-            : name(std::move(n)), bounds(std::move(b)) {}
-        bool has_bounds() const { return !bounds.empty(); }
-    };
-
-    struct GenericParameters {
-        std::vector<GenericParam> params;
-        SourceLocation open_bracket_loc;   // <
-        SourceLocation close_bracket_loc;  // >
-
-        bool empty() const { return params.empty(); }
-        size_t size() const { return params.size(); }
-        
-        // Iterator passthrough
-        auto begin() { return params.begin(); }
-        auto end()   { return params.end(); }
-        auto begin() const { return params.begin(); }
-        auto end()   const { return params.end(); }
-    };
-
-    // ============================================================================
-    // BLOCK (standalone, reused by statements/expressions)
-    // ============================================================================
-
-    struct Block {
-        std::vector<ConstructPtr> statements;   // no nested blocks directly?
-        SourceLocation location;
-        Block(SourceLocation l, std::vector<ConstructPtr> s)
-            : statements(std::move(s)), location(std::move(l)) {}
-    };
-    using BlockPtr = Ptr<Block>;
-
-    // ============================================================================
-    // DIRECTIVES (replaces attributes)
-    // ============================================================================
-
-    struct Directive {
-        std::string                name;
-        std::vector<ExpressionPtr> arguments;
-        Directive(std::string n, std::vector<ExpressionPtr> args)
-            : name(std::move(n)), arguments(std::move(args)) {}
-    };
-    using Directives = std::vector<Directive>;
-
-    // ============================================================================
-    // PARAMETERS
-    // ============================================================================
-
-    struct Param {
-        std::string   name;
-        TypePtr       type;
-        ExpressionPtr default_value = nullptr;
-        SourceLocation location;
-    };
-
-    struct Parameters {
-        std::vector<Param> params;
-        SourceLocation open_paren_loc; // (
-        SourceLocation close_paren_loc; // )
-        
-        bool empty() const { return params.empty(); }
-        size_t size() const { return params.size(); }
-        
-        // Iterator passthrough
-        auto begin() { return params.begin(); }
-        auto end()   { return params.end(); }
-        auto begin() const { return params.begin(); }
-        auto end()   const { return params.end(); }
-    };
-
-    // ============================================================================
-    // EXPRESSIONS
-    // ============================================================================
+    inline NumericSuffix parse_float_suffix(const std::string& suf) {
+        if (suf == "f32")  return NumericSuffix::F32;
+        if (suf == "f64")  return NumericSuffix::F64;
+        if (suf == "f")    return NumericSuffix::F32;  // f is shorthand for f32
+        if (suf == "d")    return NumericSuffix::F64;  // d is shorthand for f64
+        return NumericSuffix::NONE;
+    }
 
     struct LiteralInt : public Expression {
-        std::string value;
-        explicit LiteralInt(SourceLocation l, std::string v)
-            : Expression(NodeKind::LITERAL_INT, std::move(l)), value(std::move(v)) {}
+        std::string value;      // "42", "0xFF", "0b1010"
+        NumericSuffix suffix;   // NONE for default (i32)
+        
+        LiteralInt(SourceLocation l, std::string v, NumericSuffix suf = NumericSuffix::NONE)
+            : Expression(NodeKind::LITERAL_INT, std::move(l)), value(std::move(v)), suffix(suf) {}
     };
 
     struct LiteralFloat : public Expression {
-        std::string value;
-        explicit LiteralFloat(SourceLocation l, std::string v)
-            : Expression(NodeKind::LITERAL_FLOAT, std::move(l)), value(std::move(v)) {}
-    };
-
-    struct LiteralComplex : public Expression {
-        std::string value;   // includes 'i'
-        explicit LiteralComplex(SourceLocation l, std::string v)
-            : Expression(NodeKind::LITERAL_COMPLEX, std::move(l)), value(std::move(v)) {}
+        std::string value;      // "3.14", "1.0e9"
+        NumericSuffix suffix;   // NONE for default (f64)
+        
+        LiteralFloat(SourceLocation l, std::string v, NumericSuffix suf = NumericSuffix::NONE)
+            : Expression(NodeKind::LITERAL_FLOAT, std::move(l)), value(std::move(v)), suffix(suf) {}
     };
 
     struct LiteralString : public Expression {
@@ -483,34 +147,10 @@ namespace xenon {
             : Expression(NodeKind::LITERAL_STRING, std::move(l)), value(std::move(v)) {}
     };
 
-    struct LiteralRawString : public Expression {
-        std::string value;
-        explicit LiteralRawString(SourceLocation l, std::string v)
-            : Expression(NodeKind::LITERAL_RAW_STRING, std::move(l)), value(std::move(v)) {}
-    };
-
     struct LiteralBool : public Expression {
         bool value;
         explicit LiteralBool(SourceLocation l, bool v)
             : Expression(NodeKind::LITERAL_BOOL, std::move(l)), value(v) {}
-    };
-
-    struct LiteralArray : public Expression {
-        std::vector<ExpressionPtr> elements;
-        explicit LiteralArray(SourceLocation l, std::vector<ExpressionPtr> elems)
-            : Expression(NodeKind::LITERAL_ARRAY, std::move(l)), elements(std::move(elems)) {}
-    };
-
-    struct LiteralMap : public Expression {
-        std::vector<std::pair<ExpressionPtr, ExpressionPtr>> pairs;
-        explicit LiteralMap(SourceLocation l, std::vector<std::pair<ExpressionPtr, ExpressionPtr>> p)
-            : Expression(NodeKind::LITERAL_MAP, std::move(l)), pairs(std::move(p)) {}
-    };
-
-    struct LiteralTuple : public Expression {
-        std::vector<ExpressionPtr> elements;
-        explicit LiteralTuple(SourceLocation l, std::vector<ExpressionPtr> elems)
-            : Expression(NodeKind::LITERAL_TUPLE, std::move(l)), elements(std::move(elems)) {}
     };
 
     struct LiteralNullptr : public Expression {
@@ -518,16 +158,33 @@ namespace xenon {
             : Expression(NodeKind::LITERAL_NULLPTR, std::move(l)) {}
     };
 
-    struct LiteralInterpString : public Expression {
-        struct Part {
-            bool          is_expr;
-            std::string   text;      // if !is_expr
-            ExpressionPtr expr;      // if is_expr
-        };
-        std::vector<Part> parts;
-        explicit LiteralInterpString(SourceLocation l, std::vector<Part> p)
-            : Expression(NodeKind::LITERAL_INTERP_STRING, std::move(l)), parts(std::move(p)) {}
+    struct LiteralArray : public Expression {
+        std::vector<ExpressionPtr> elements;
+        explicit LiteralArray(SourceLocation l, std::vector<ExpressionPtr> elems)
+            : Expression(NodeKind::LITERAL_ARRAY, std::move(l)), elements(std::move(elems)) {}
     };
+    
+
+    // -- Names / Access ---------------------------------------------------------------
+
+    struct Name;
+
+    using NamePtr = std::unique_ptr<Name>;
+
+    struct Name : public Expression {
+        std::string identifier;
+        NamePtr next;   // "::" chain
+        
+        Name(SourceLocation l, std::string id, NamePtr nxt = nullptr)
+            : Expression(NodeKind::NAME, l), identifier(std::move(id)), next(std::move(nxt)) {}
+        
+        bool is_qualified() const { return next != nullptr; }
+        std::string to_string() const {
+            if (next) return identifier + "::" + next->to_string();
+            return identifier;
+        }
+    };
+
 
     struct MemberAccessExpr : public Expression {
         ExpressionPtr object;
@@ -536,10 +193,17 @@ namespace xenon {
             : Expression(NodeKind::MEMBER_ACCESS_EXPR, std::move(l)), object(std::move(obj)), member(std::move(mem)) {}
     };
 
+    struct LiteralClass : public Expression {
+        NamePtr struct_name;
+        std::vector<ExpressionPtr> args;
+        LiteralClass(SourceLocation l, NamePtr n, std::vector<ExpressionPtr> a)
+            : Expression(NodeKind::LITERAL_CLASS, std::move(l)), struct_name(std::move(n)), args(std::move(a)) {}
+    };
+
     struct CallExpr : public Expression {
         ExpressionPtr              callee;
         std::vector<ExpressionPtr> args;
-        bool is_early_return = false;  // for "callee(...)?" syntax
+        bool is_early_return = false;  // for "callee(...)?" syntax for later!
         CallExpr(SourceLocation l, ExpressionPtr c, std::vector<ExpressionPtr> a, bool early_ret = false)
             : Expression(NodeKind::CALL_EXPR, std::move(l)), callee(std::move(c)), args(std::move(a)), is_early_return(early_ret) {}
     };
@@ -551,360 +215,375 @@ namespace xenon {
             : Expression(NodeKind::INDEX_EXPR, std::move(l)), object(std::move(obj)), index(std::move(idx)) {}
     };
 
-    struct BinaryExpr : public Expression {
-        BinaryOp      op;
-        ExpressionPtr left;
-        ExpressionPtr right;
-        BinaryExpr(SourceLocation l, BinaryOp o, ExpressionPtr lexpr, ExpressionPtr rexpr)
-            : Expression(NodeKind::BINARY_EXPR, std::move(l)), op(o), left(std::move(lexpr)), right(std::move(rexpr)) {}
+
+    // -- Type Expressions ---------------------------------------------------------------
+
+    // Base class for all type expressions in the AST
+    struct TypeExpression : public ASTNode {
+        explicit TypeExpression(NodeKind k, SourceLocation l)
+            : ASTNode(k, l) {}
     };
 
-    struct UnaryExpr : public Expression {
-        UnaryOp       op;
-        ExpressionPtr operand;
-        UnaryExpr(SourceLocation l, UnaryOp o, ExpressionPtr e)
-            : Expression(NodeKind::UNARY_EXPR, std::move(l)), op(o), operand(std::move(e)) {}
+    using TypeExprPtr = std::unique_ptr<TypeExpression>;
+
+    // One type expression node for all named types
+    struct NamedTypeExpr : public TypeExpression {
+        NamePtr name;
+        
+        NamedTypeExpr(SourceLocation l, NamePtr n)
+            : TypeExpression(NodeKind::NAMED_TYPE, l), name(std::move(n)) {}
+    };
+
+    // Pointer type (ptr T)
+    struct PointerTypeExpr : public TypeExpression {
+        TypeExprPtr element_type;
+        bool is_mut;  // mut ptr T or ptr T
+        bool is_box;  // box T or ptr T
+        PointerTypeExpr(SourceLocation l, TypeExprPtr elem, bool mut = false, bool boxed = false)
+            : TypeExpression(NodeKind::POINTER_TYPE, l), element_type(std::move(elem)), is_mut(mut), is_box(boxed) {}
+    };
+
+    // Reference type (ref T)
+    struct ReferenceTypeExpr : public TypeExpression {
+        TypeExprPtr element_type;
+        bool is_mut;  // mut ref T or ref T
+        ReferenceTypeExpr(SourceLocation l, TypeExprPtr elem, bool mut = false)
+            : TypeExpression(NodeKind::REFERENCE_TYPE, l), element_type(std::move(elem)), is_mut(mut) {}
+    };
+
+    // Array type ([T; N] or [T])
+    struct ArrayTypeExpr : public TypeExpression {
+        TypeExprPtr element_type;
+        ExpressionPtr size_expr;  // can be nullptr for dynamic arrays
+        ArrayTypeExpr(SourceLocation l, TypeExprPtr elem, ExpressionPtr size = nullptr)
+            : TypeExpression(NodeKind::ARRAY_TYPE, l), element_type(std::move(elem)),
+                size_expr(std::move(size)) {}
+    };
+
+
+    // -- Operations ---------------------------------------------------------------
+
+    enum class OperatorKind {
+        ADD,
+        SUBTRACT,
+        MULTIPLY,
+        DIVIDE,
+        MODULO,
+        ADD_ASSIGN,
+        SUBTRACT_ASSIGN,
+        MULTIPLY_ASSIGN,
+        DIVIDE_ASSIGN,
+        MODULO_ASSIGN,
+        BITWISE_AND,
+        BITWISE_OR,
+        BITWISE_XOR,
+        SHIFT_LEFT,
+        SHIFT_RIGHT,
+        BITWISE_AND_ASSIGN,
+        BITWISE_OR_ASSIGN,
+        BITWISE_XOR_ASSIGN,
+        SHIFT_LEFT_ASSIGN,
+        SHIFT_RIGHT_ASSIGN,
+        EQUAL,
+        NOT_EQUAL,
+        LESS_THAN,
+        LESS_EQUAL,
+        GREATER_THAN,
+        GREATER_EQUAL,
+        LOGICAL_AND,
+        LOGICAL_OR,
+        LOGICAL_NOT,
+        ASSIGN,                     // =
+        NEGATE, BITWISE_NOT, ADDRESS_OF, DEREFERENCE,
+        INDEX_READ
+    };
+
+    struct OperationExpr : public Expression {
+        OperatorKind op;
+        ExpressionPtr  lhs; // nullptr when unary
+        ExpressionPtr  rhs;
+
+        bool is_binary() const { return lhs != nullptr; }
+        OperationExpr(SourceLocation l, OperatorKind o, ExpressionPtr left, ExpressionPtr right)
+            : Expression(NodeKind::OPERATION_EXPR, std::move(l)), op(o), lhs(std::move(left)), rhs(std::move(right)) {}
     };
 
     struct TernaryExpr : public Expression {
         ExpressionPtr condition;
-        ExpressionPtr then_expr;
-        ExpressionPtr else_expr;
-        TernaryExpr(SourceLocation l, ExpressionPtr cond, ExpressionPtr then_e, ExpressionPtr else_e)
-            : Expression(NodeKind::TERNARY_EXPR, std::move(l)), condition(std::move(cond)), then_expr(std::move(then_e)), else_expr(std::move(else_e)) {}
+        ExpressionPtr then_branch;
+        ExpressionPtr else_branch;
+
+        TernaryExpr(SourceLocation l, ExpressionPtr cond, ExpressionPtr then_b, ExpressionPtr else_b)
+            : Expression(NodeKind::TERNARY_EXPR, std::move(l)), condition(std::move(cond)),
+                then_branch(std::move(then_b)), else_branch(std::move(else_b)) {}
     };
+
+
+    // -- Allocation ---------------------------------------------------------------
 
     struct NewExpr : public Expression {
-        TypePtr                    alloc_type;
-        std::vector<ExpressionPtr> ctor_args;
-        NewExpr(SourceLocation l, TypePtr t, std::vector<ExpressionPtr> args)
-            : Expression(NodeKind::NEW_EXPR, std::move(l)), alloc_type(std::move(t)), ctor_args(std::move(args)) {}
-    };
-
-    struct DeleteStmt : public Construct {
         ExpressionPtr expr;
-        DeleteStmt(SourceLocation l, ExpressionPtr e)
-            : Construct(NodeKind::DELETE_STMT, std::move(l)), expr(std::move(e)) {}
+        NewExpr(SourceLocation l, ExpressionPtr e)
+            : Expression(NodeKind::NEW_EXPR, std::move(l)), expr(std::move(e)) {}
     };
 
-    struct Lambda : public Expression {
-        GenericParameters generic_params;
-        Parameters    params;
-        TypePtr       return_type;  // nullptr = inferred
-        std::variant<ExpressionPtr, BlockPtr> body;   // expression or block
-        Lambda(SourceLocation l, GenericParameters gp, Parameters ps,
-               TypePtr ret, std::variant<ExpressionPtr, BlockPtr> b)
-            : Expression(NodeKind::LAMBDA_EXPR, std::move(l)), generic_params(std::move(gp)),
-              params(std::move(ps)), return_type(std::move(ret)), body(std::move(b)) {}
+    struct DeleteStmt : public Statement {
+        ExpressionPtr target;
+        DeleteStmt(SourceLocation l, ExpressionPtr t)
+            : Statement(NodeKind::DELETE_STMT, std::move(l)), target(std::move(t)) {}
     };
 
-    // ============================================================================
-    // STATEMENTS (all derive from Construct)
-    // ============================================================================
 
-    struct ExpressionStmt : public Construct {
+    // -- Statements ---------------------------------------------------------------
+
+    struct BlockStmt : public Statement {
+        std::vector<StatementPtr> statements;
+        explicit BlockStmt(SourceLocation l, std::vector<StatementPtr> stmts)
+            : Statement(NodeKind::BLOCK_STMT, std::move(l)), statements(std::move(stmts)) {}
+    };
+
+    using BlockPtr = std::unique_ptr<BlockStmt>;
+
+    struct ExpressionStmt : public Statement {
         ExpressionPtr expr;
-        
-        ExpressionStmt(SourceLocation l, ExpressionPtr e)
-            : Construct(NodeKind::EXPRESSION_STMT, std::move(l)), expr(std::move(e)) {}
+        explicit ExpressionStmt(SourceLocation l, ExpressionPtr e)
+            : Statement(NodeKind::EXPRESSION_STMT, std::move(l)), expr(std::move(e)) {}
     };
 
-    struct IfStmt : public Construct {
-        struct Branch {
-            ExpressionPtr condition;
-            BlockPtr      body;
-        };
-        Branch              if_branch;
-        std::vector<Branch> elif_branches;
-        BlockPtr            else_body;   // nullptr if absent
-        IfStmt(SourceLocation l, Branch if_b, std::vector<Branch> elif_b = {}, BlockPtr else_b = nullptr)
-            : Construct(NodeKind::IF_STMT, std::move(l)), if_branch(std::move(if_b)), elif_branches(std::move(elif_b)), else_body(std::move(else_b)) {}
-    };
 
-    struct IfLetStmt : public Construct {
-        std::string    binding;
-        ExpressionPtr  value;
-        BlockPtr       body;
-        BlockPtr       else_body;
-        IfLetStmt(SourceLocation l, std::string b, ExpressionPtr val, BlockPtr body_arg, BlockPtr else_b = nullptr)
-            : Construct(NodeKind::IF_LET_STMT, std::move(l)), binding(std::move(b)), value(std::move(val)), body(std::move(body_arg)), else_body(std::move(else_b)) {}
-    };
+    // -- Control Flow ---------------------------------------------------------------
 
-    struct WhileStmt : public Construct {
+    struct IfStmt : public Statement {
         ExpressionPtr condition;
-        BlockPtr      body;
-        WhileStmt(SourceLocation l, ExpressionPtr cond, BlockPtr b)
-            : Construct(NodeKind::WHILE_STMT, std::move(l)), condition(std::move(cond)), body(std::move(b)) {}
+        StatementPtr  then_branch;
+        StatementPtr  else_branch;  // can be nullptr
+        IfStmt(SourceLocation l, ExpressionPtr cond, StatementPtr then_b, StatementPtr else_b = nullptr)
+            : Statement(NodeKind::IF_STMT, std::move(l)), condition(std::move(cond)), then_branch(std::move(then_b)), else_branch(std::move(else_b)) {}
     };
 
-    struct DoWhileStmt : public Construct {
-        BlockPtr      body;
+    struct WhileStmt : public Statement {
         ExpressionPtr condition;
-        DoWhileStmt(SourceLocation l, BlockPtr b, ExpressionPtr cond)
-            : Construct(NodeKind::DO_WHILE_STMT, std::move(l)), body(std::move(b)), condition(std::move(cond)) {}
+        StatementPtr  body;
+        WhileStmt(SourceLocation l, ExpressionPtr cond, StatementPtr b)
+            : Statement(NodeKind::WHILE_STMT, std::move(l)), condition(std::move(cond)), body(std::move(b)) {}
     };
 
-    struct ForeachStmt : public Construct {
-        std::string   iter_name;
-        TypePtr       iter_type;    // nullptr = inferred
-        ExpressionPtr iterable;
-        BlockPtr      body;
-        ForeachStmt(SourceLocation l, std::string name, TypePtr type, ExpressionPtr iter, BlockPtr b)
-            : Construct(NodeKind::FOREACH_STMT, std::move(l)), iter_name(std::move(name)), iter_type(std::move(type)), iterable(std::move(iter)), body(std::move(b)) {}
+    // -- Jump Statements ---------------------------------------------------------------
+
+    struct ReturnStmt : public Statement {
+        ExpressionPtr return_value;  // can be nullptr
+        explicit ReturnStmt(SourceLocation l, ExpressionPtr val = nullptr)
+            : Statement(NodeKind::RETURN_STMT, std::move(l)), return_value(std::move(val)) {}
     };
 
-    struct MatchStmt : public Construct {
-        struct Arm {
-            ExpressionPtr pattern;   // nullptr = wildcard
-            BlockPtr  body;      // usually a block, but can be a single stmt?
-        };
-        ExpressionPtr    subject;
-        std::vector<Arm> arms;
-        MatchStmt(SourceLocation l, ExpressionPtr subj, std::vector<Arm> a)
-            : Construct(NodeKind::MATCH_STMT, std::move(l)), subject(std::move(subj)), arms(std::move(a)) {}
-    };
-
-    struct ReturnStmt : public Construct {
-        ExpressionPtr value;   // nullptr = bare return
-        explicit ReturnStmt(SourceLocation l, ExpressionPtr v = nullptr)
-            : Construct(NodeKind::RETURN_STMT, std::move(l)), value(std::move(v)) {}
-    };
-
-    struct BreakStmt : public Construct {
+    struct BreakStmt : public Statement {
         explicit BreakStmt(SourceLocation l)
-            : Construct(NodeKind::BREAK_STMT, std::move(l)) {}
+            : Statement(NodeKind::BREAK_STMT, std::move(l)) {}
     };
 
-    struct ContinueStmt : public Construct {
+    struct ContinueStmt : public Statement {
         explicit ContinueStmt(SourceLocation l)
-            : Construct(NodeKind::CONTINUE_STMT, std::move(l)) {}
+            : Statement(NodeKind::CONTINUE_STMT, std::move(l)) {}
     };
 
-    struct ThrowStmt : public Construct {
-        ExpressionPtr exception;
-        explicit ThrowStmt(SourceLocation l, ExpressionPtr e)
-            : Construct(NodeKind::THROW_STMT, std::move(l)), exception(std::move(e)) {}
-    };
 
-    struct TryCatchStmt : public Construct {
-        struct CatchClause {
-            std::string binding;
-            TypePtr     exception_type;
-            BlockPtr    body;
-        };
-        BlockPtr                 try_body;
-        std::vector<CatchClause> catches;
-        BlockPtr                 finally_body;   // nullptr = no finally
-        TryCatchStmt(SourceLocation l, BlockPtr try_b, std::vector<CatchClause> c, BlockPtr finally_b = nullptr)
-            : Construct(NodeKind::TRY_CATCH_STMT, std::move(l)), try_body(std::move(try_b)), catches(std::move(c)), finally_body(std::move(finally_b)) {}
-    };
-
-    // ============================================================================
-    // DECLARATIONS (derive from Declaration)
-    // ============================================================================
+    // -- Declarations ---------------------------------------------------------------
 
     struct VariableDecl : public Declaration {
-        std::string   name;
-        TypePtr       type;          // nullptr = inferred
-        ExpressionPtr initialiser;
-        bool          is_mutable = false;
-        bool          is_static = false;
-        bool         is_public = false;
-        Directives    dirs;
-        VariableDecl(SourceLocation l, std::string n, TypePtr t, ExpressionPtr i, bool mut = false, bool stat=false, Directives d = {})
-            : Declaration(NodeKind::VARIABLE_DECL, std::move(l)), name(std::move(n)), type(std::move(t)), initialiser(std::move(i)), is_mutable(mut), is_static(stat), dirs(std::move(d)) {}
+        std::string name;
+        TypeExprPtr type_expr;  // can be nullptr
+        ExpressionPtr init_expr;  // can be nullptr
+        bool is_mut;
+        bool is_public;
+        VariableDecl(SourceLocation l, std::string n, TypeExprPtr t = nullptr, ExpressionPtr i = nullptr, bool m = false, bool p = false)
+            : Declaration(NodeKind::VARIABLE_DECL, std::move(l)), name(std::move(n)), type_expr(std::move(t)), init_expr(std::move(i)), is_mut(m), is_public(p) {}
     };
+
+    using VariableDeclPtr = std::unique_ptr<VariableDecl>;
 
     struct FunctionDecl : public Declaration {
-        std::string   name;
-        GenericParameters generic_params;
-        Parameters    params;
-        TypePtr       return_type;   // nullptr = void/inferred
-        BlockPtr      body;          // nullptr = prototype
-        bool          is_static = false;
-        bool          is_mut    = false;
-        Directives    dirs;
-        FunctionDecl(SourceLocation l, std::string n, GenericParameters gp, Parameters ps,
-                     TypePtr ret, BlockPtr b, bool stat = false, bool mut = false, Directives d = {})
-            : Declaration(NodeKind::FUNCTION_DECL, std::move(l)), name(std::move(n)), generic_params(std::move(gp)),
-              params(std::move(ps)), return_type(std::move(ret)), body(std::move(b)), is_static(stat), is_mut(mut), dirs(std::move(d)) {}
+        std::string name;
+        std::vector<VariableDeclPtr> parameters;
+        TypeExprPtr return_type;  // can be nullptr
+        BlockPtr body;          // can be nullptr (only in header)
+        bool is_public;
+        FunctionDecl(SourceLocation l, std::string n, std::vector<VariableDeclPtr> params, TypeExprPtr ret_type = nullptr, BlockPtr b = nullptr, bool p = false)
+            : Declaration(NodeKind::FUNCTION_DECL, std::move(l)), name(std::move(n)), parameters(std::move(params)), return_type(std::move(ret_type)), body(std::move(b)), is_public(p) {}
     };
 
-    struct ConstructorDecl : public Declaration {
-        GenericParameters generic_params;
-        Parameters    params;
-        BlockPtr      body;
-        Directives    dirs;
-        SourceLocation location;  // for error reporting
-        bool is_public = false;
-        ConstructorDecl(SourceLocation l, GenericParameters gp, Parameters ps, BlockPtr b, Directives d = {}, bool pub_ = false)
-            : Declaration(NodeKind::CONSTRUCTOR_DECL, std::move(l)), generic_params(std::move(gp)),
-              params(std::move(ps)), body(std::move(b)), dirs(std::move(d)), location(std::move(l)), is_public(pub_) {}
-    };
+    using FunctionDeclPtr = std::unique_ptr<FunctionDecl>;
 
-    struct DestructorDecl : public Declaration {
-        BlockPtr      body;
-        Directives    dirs;
-        SourceLocation location;  // for error reporting
-        DestructorDecl(SourceLocation l, BlockPtr b, Directives d = {})
-            : Declaration(NodeKind::DESTRUCTOR_DECL, std::move(l)), body(std::move(b)), dirs(std::move(d)), location(std::move(l)) {}
-    };
+    constexpr std::array<std::pair<const char*, OperatorKind>, 27> OPERATOR_MAP = {{
+        {"+", OperatorKind::ADD},
+        {"-", OperatorKind::SUBTRACT},
+        {"*", OperatorKind::MULTIPLY},
+        {"/", OperatorKind::DIVIDE},
+        {"%", OperatorKind::MODULO},
+        {"+=", OperatorKind::ADD_ASSIGN},
+        {"-=", OperatorKind::SUBTRACT_ASSIGN},
+        {"*=", OperatorKind::MULTIPLY_ASSIGN},
+        {"/=", OperatorKind::DIVIDE_ASSIGN},
+        {"%=", OperatorKind::MODULO_ASSIGN},
+        {"&", OperatorKind::BITWISE_AND},
+        {"|", OperatorKind::BITWISE_OR},
+        {"^", OperatorKind::BITWISE_XOR},
+        {"<<", OperatorKind::SHIFT_LEFT},
+        {">>", OperatorKind::SHIFT_RIGHT},
+        {"&=", OperatorKind::BITWISE_AND_ASSIGN},
+        {"|=", OperatorKind::BITWISE_OR_ASSIGN},
+        {"^=", OperatorKind::BITWISE_XOR_ASSIGN},
+        {"<<=", OperatorKind::SHIFT_LEFT_ASSIGN},
+        {">>=", OperatorKind::SHIFT_RIGHT_ASSIGN},
+        {"==", OperatorKind::EQUAL},
+        {"!=", OperatorKind::NOT_EQUAL},
+        {"<",  OperatorKind::LESS_THAN},
+        {"<=", OperatorKind::LESS_EQUAL},
+        {">",  OperatorKind::GREATER_THAN},
+        {">=", OperatorKind::GREATER_EQUAL},
+        {"[]", OperatorKind::INDEX_READ},
+    }};
 
-    struct Method {
-        std::string name;  // "new", "~", "operator+", or normal name
-        GenericParameters generic_params;
-        Parameters params;
-        TypePtr return_type;
+    constexpr std::array<std::pair<const char*, OperatorKind>, 2> UNARY_OPERATOR_MAP = {{
+        {"-", OperatorKind::NEGATE},
+        {"~", OperatorKind::BITWISE_NOT},
+    }};
+
+    constexpr std::optional<OperatorKind> lookup_operator_overload(std::string_view op, bool is_binary) {
+        if (is_binary) {
+            for (const auto& [key, value] : OPERATOR_MAP) {
+                if (key == op) return value;
+            }
+        } else {
+            for (const auto& [key, value] : UNARY_OPERATOR_MAP) {
+                if (key == op) return value;
+            }
+        }
+        return std::nullopt;
+    }
+
+
+    struct OperatorOverloadDecl : public Declaration {
+        OperatorKind op_kind;
+        std::vector<VariableDeclPtr> parameters;
+        TypeExprPtr return_type;
         BlockPtr body;
-        bool is_static = false;
-        bool is_mut = false;  // for &mut self methods
-        bool is_public = false;
-        SourceLocation location;  // for error reporting
-        Directives dirs;
-        Method(SourceLocation l, std::string n, GenericParameters gp, Parameters ps,
-               TypePtr ret, BlockPtr b, bool stat = false, bool mut = false, bool pub_ = false, Directives d = {})
-            : name(std::move(n)), generic_params(std::move(gp)), params(std::move(ps)), return_type(std::move(ret)),
-              body(std::move(b)), is_static(stat), is_mut(mut), is_public(pub_), location(std::move(l)), dirs(std::move(d)) {}
+        bool is_public;
+        OperatorOverloadDecl(SourceLocation l, OperatorKind op,
+                            std::vector<VariableDeclPtr> params,
+                            TypeExprPtr ret_type = nullptr,
+                            BlockPtr b = nullptr,
+                            bool p = false)
+            : Declaration(NodeKind::OPERATOR_OVERLOAD_DECL, std::move(l)),
+            op_kind(op), parameters(std::move(params)),
+            return_type(std::move(ret_type)), body(std::move(b)), is_public(p) {}
     };
 
-    struct Operator {
-        OverloadableOp op;
-        Parameters     params;
-        TypePtr        return_type;
-        BlockPtr       body;
-        bool           is_mut = false;
-        bool           is_public = false;
-        SourceLocation location;  // for error reporting
-        Directives dirs;
-        Operator(SourceLocation l, OverloadableOp o, Parameters ps, TypePtr ret, BlockPtr b,
-                 bool mut = false, bool pub = false, Directives d = {})
-            : op(o), params(std::move(ps)), return_type(std::move(ret)), body(std::move(b)),
-              is_mut(mut), is_public(pub), location(std::move(l)), dirs(std::move(d)) {}
-    };
+    using OperatorOverloadDeclPtr = std::unique_ptr<OperatorOverloadDecl>;
 
-    struct ClassDecl : public Declaration {
+    struct ClassFieldDecl : public Declaration {
         std::string name;
-        GenericParameters generic_params;
-
-        std::vector<Ptr<ConstructorDecl>> constructors;     // multiple constructors allowed
-        std::optional<Ptr<DestructorDecl>> destructor;      // at most one destructor
-        
-        struct Field {
-            std::string name;
-            TypePtr type;
-            ExpressionPtr default_value = nullptr;
-            bool is_public = false;
-            bool is_static = false;
-            bool is_mut = true;  // fields are mutable by default
-            Field(std::string n, TypePtr t, ExpressionPtr init = nullptr,
-                  bool pub = false, bool stat = false, bool mut = true)
-                : name(std::move(n)), type(std::move(t)), default_value(std::move(init)),
-                  is_public(pub), is_static(stat), is_mut(mut) {}
-        };
-            
-        std::vector<Ptr<Field>> fields;
-        
-        // Methods live directly in the class
-        std::vector<Ptr<Method>> methods;
-
-        // Operators also live directly in the class
-        std::vector<Ptr<Operator>> operators;
-        
-        Directives dirs;
-
-        ClassDecl(SourceLocation l, std::string n, GenericParameters gp = {},
-                  std::vector<Ptr<ConstructorDecl>> ctors = {},
-                  std::optional<Ptr<DestructorDecl>> dtor = std::nullopt,
-                  std::vector<Ptr<Field>> flds = {}, std::vector<Ptr<Method>> meths = {},
-                  std::vector<Ptr<Operator>> ops = {}, Directives d = {})
-            : Declaration(NodeKind::CLASS_DECL, std::move(l)), name(std::move(n)), generic_params(std::move(gp)),
-              constructors(std::move(ctors)), destructor(std::move(dtor)),
-              fields(std::move(flds)), methods(std::move(meths)), operators(std::move(ops)), dirs(std::move(d)) {}
+        TypeExprPtr type_expr;
+        bool is_public;
+        ClassFieldDecl(SourceLocation l, std::string n,
+                    TypeExprPtr t = nullptr,
+                    bool p = false)
+            : Declaration(NodeKind::CLASS_FIELD_DECL, std::move(l)),
+            name(std::move(n)), type_expr(std::move(t)), is_public(p) {}
     };
 
-    // "impl MyType { ... }" (inherent impl, no trait)
-    // "impl<T: MyTrait> for MyType<T> { ... } " 
+    using ClassFieldDeclPtr = std::unique_ptr<ClassFieldDecl>;
 
-    struct ImplDecl : public Declaration {
-        NamePtr         trait_name;                     // trait name for trait impls (nullopt for inherent impls)   
-        NamePtr         target_type;                    // the type being implemented
-        GenericParameters generic_params;               // e.g. <T> in impl<T> ...
-
-        std::vector<Ptr<Method>> methods;                  // methods and associated functions
-        std::vector<Ptr<Operator>> operators;              // operator overloads
-
-        Directives dirs;
-
-        ImplDecl(SourceLocation l, NamePtr trait, NamePtr target,
-                GenericParameters gp = {},
-                std::vector<Ptr<Method>> meths = {}, std::vector<Ptr<Operator>> ops = {},
-                Directives d = {})
-            : Declaration(NodeKind::IMPL_DECL, std::move(l)), 
-            trait_name(std::move(trait)), target_type(std::move(target)), generic_params(std::move(gp)),
-            methods(std::move(meths)), operators(std::move(ops)),
-            dirs(std::move(d)) {}
-    };
-
-
-    struct TraitDecl : public Declaration {
-        struct MethodReq {
-            std::string name;
-            GenericParameters generic_params;
-            std::vector<TypePtr> param_types;
-            TypePtr return_type;
-            bool is_mut = false;
-        };
-        struct OperatorReq {
-            OverloadableOp op;
-            std::vector<TypePtr> param_types;
-            TypePtr return_type;
-        };
+    struct NamespaceVarDecl : public Declaration {
         std::string name;
-        GenericParameters generic_params;
-        std::vector<MethodReq> method_reqs;
-        std::vector<OperatorReq> operator_reqs;
-        Directives dirs;
-        TraitDecl(SourceLocation l, std::string n, GenericParameters gp = {}, std::vector<MethodReq> methods = {}, std::vector<OperatorReq> ops = {}, Directives d = {})
-            : Declaration(NodeKind::TRAIT_DECL, std::move(l)), name(std::move(n)), generic_params(std::move(gp)), method_reqs(std::move(methods)), operator_reqs(std::move(ops)), dirs(std::move(d)) {}
+        TypeExprPtr type_expr;
+        ExpressionPtr initialiser;
+        bool is_mut;
+        bool is_public;
+        NamespaceVarDecl(SourceLocation l, std::string n,
+                        TypeExprPtr t = nullptr,
+                        ExpressionPtr i = nullptr,
+                        bool m = false,
+                        bool p = false)
+            : Declaration(NodeKind::NAMESPACE_VARIABLE_DECL, std::move(l)),
+            name(std::move(n)), type_expr(std::move(t)),
+            initialiser(std::move(i)), is_mut(m), is_public(p) {}
     };
 
-    struct TypeAliasDecl : public Declaration {
-        std::string   alias_name;
-        GenericParameters generic_params;
-        TypePtr       target_type;
-        Directives    dirs;
-        TypeAliasDecl(SourceLocation l, std::string name, GenericParameters gp, TypePtr target, Directives d = {})
-            : Declaration(NodeKind::TYPE_ALIAS_DECL, std::move(l)), alias_name(std::move(name)), generic_params(std::move(gp)), target_type(std::move(target)), dirs(std::move(d)) {}
+    using NamespaceVarDeclPtr = std::unique_ptr<NamespaceVarDecl>;
+
+    struct ClassMethodDecl : public Declaration {
+        std::string name;
+        std::vector<VariableDeclPtr> parameters;
+        TypeExprPtr return_type;
+        BlockPtr body;
+        bool is_public;
+        bool is_static;
+        ClassMethodDecl(SourceLocation l, std::string n,
+                        std::vector<VariableDeclPtr> params,
+                        TypeExprPtr ret_type = nullptr,
+                        BlockPtr b = nullptr,
+                        bool p = false,
+                        bool s = false)
+            : Declaration(NodeKind::CLASS_METHOD_DECL, std::move(l)),
+            name(std::move(n)), parameters(std::move(params)),
+            return_type(std::move(ret_type)), body(std::move(b)),
+            is_public(p), is_static(s) {}
     };
 
-    struct EnumDecl : public Declaration {
-        struct Variant {
-            std::string name;
-        };
-        std::string          name;
-        std::vector<Variant> variants;
-        Directives           dirs;
-        EnumDecl(SourceLocation l, std::string n, std::vector<Variant> vs, Directives d = {})
-            : Declaration(NodeKind::ENUM_DECL, std::move(l)), name(std::move(n)), variants(std::move(vs)), dirs(std::move(d)) {}
+    using ClassMethodDeclPtr = std::unique_ptr<ClassMethodDecl>;
+
+    struct ClassStructureDecl : public Declaration {
+        std::string name;
+        std::vector<ClassFieldDeclPtr> fields;
+        bool is_public;
+        ClassStructureDecl(SourceLocation l, std::string n,
+                        std::vector<ClassFieldDeclPtr> f,
+                        bool p = false)
+            : Declaration(NodeKind::CLASS_STRUCTURE_DECL, std::move(l)),
+            name(std::move(n)), fields(std::move(f)), is_public(p) {}
+    };
+
+    using ClassStructureDeclPtr = std::unique_ptr<ClassStructureDecl>;
+
+    struct ClassImplementationDecl : public Declaration {
+        NamePtr class_name;
+        std::vector<NamespaceVarDeclPtr> static_vars;
+        std::vector<ClassMethodDeclPtr> methods;
+        std::vector<OperatorOverloadDeclPtr> operator_overloads;
+        std::vector<ClassMethodDeclPtr> constructors;
+        ClassMethodDeclPtr destructor;
+
+        ClassImplementationDecl(SourceLocation l, NamePtr n,
+                                std::vector<NamespaceVarDeclPtr> sv = {},
+                                std::vector<ClassMethodDeclPtr> m = {},
+                                std::vector<OperatorOverloadDeclPtr> o = {},
+                                std::vector<ClassMethodDeclPtr> c = {},
+                                ClassMethodDeclPtr d = nullptr)
+            : Declaration(NodeKind::CLASS_IMPLEMENTATION_DECL, std::move(l)),
+            class_name(std::move(n)), static_vars(std::move(sv)),
+            methods(std::move(m)), operator_overloads(std::move(o)),
+            constructors(std::move(c)), destructor(std::move(d)) {}
+    };
+
+    using ClassImplementationDeclPtr = std::unique_ptr<ClassImplementationDecl>;
+
+
+    struct EOFStmt : public Statement {
+        explicit EOFStmt(SourceLocation l)
+            : Statement(NodeKind::EOF_STMT, std::move(l)) {}
     };
 
 
-    // ============================================================================
-    // MODULE SYSTEM
-    // ============================================================================
-
-    struct ImportDecl {
-        SourceLocation location;
-        std::string                module_path;
-        explicit ImportDecl(SourceLocation l, std::string path)
-            : location(std::move(l)), module_path(std::move(path)) {}
+    struct ASTRootElement {
+        std::vector<StatementPtr> declarations;
     };
 
-    struct ExportDecl {
-        SourceLocation location;
-        std::vector<NamePtr> symbols;
-        ExportDecl(SourceLocation l, std::vector<NamePtr> syms)
-            : location(std::move(l)), symbols(std::move(syms)) {}
+
+    struct ModuleAST {
+        std::string module_name;
+        std::vector<std::string> dependencies;  // names of modules this module depends on
+        ASTRootElement root;
     };
 
-} // namespace xenon
+
+}

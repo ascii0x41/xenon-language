@@ -8,6 +8,7 @@ build/
 .vscode/
 .cursor/
 .idea/
+.cache/
 .temp/
 *.o
 *.obj
@@ -21,5 +22,7 @@ build/
 *.iobj
 *.exe
 *.out
+*.log
 __pycache__/
 venv/
+examples/

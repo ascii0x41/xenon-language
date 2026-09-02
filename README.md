@@ -42,8 +42,8 @@ xec --help
 Xenon currently supports:
 - `xec build` – validate a project using `xenon.toml`
 - `xec check` – parse and validate a project or file
-- `xec run <file.ar>` – build and run a single file (runtime execution is experimental)
-- `xec <file.ar>` – compile and validate a single file directly
+- `xec run <file.xe>` – build and run a single file (runtime execution is experimental)
+- `xec <file.xe>` – compile and validate a single file directly
 
 For detailed commands and flags, see [CLI Usage](docs/compiler/cli.md).
 
