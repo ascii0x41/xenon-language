@@ -25,12 +25,8 @@ namespace xenon::tokens {
         NEW,        // new   - heap allocation
         DELETE,     // delete - memory free
 
-        MUT,        // mut   - marks a trait method signature as mutating
-    
         // Type qualifiers
-        REF,        // ref   - borrowed reference
-        PTR,        // ptr   - raw pointer (unsafe)
-//        BOX,        // box   - boxed pointer (heap-allocated)
+        MUT,        // mut
 
         // Control flow
         IF,         // if
@@ -46,7 +42,6 @@ namespace xenon::tokens {
 
         // Module system
         IMPORT,     // import
-        EXPORT,     // export
         MODULE,     // module
 
         // Special value keywords
@@ -60,6 +55,7 @@ namespace xenon::tokens {
         INT_LITERAL,        // 42  0xFF  0b1010  0o77
         FLOAT_LITERAL,      // 3.14  6.022E23
         STRING_LITERAL,     // "hello"
+        CHARACTER_LITERAL,  // 'c'
 
         // OPERATORS
 
@@ -140,12 +136,8 @@ namespace xenon::tokens {
         {"pub",       TokenType::PUB},
         {"new",       TokenType::NEW},
         {"delete",    TokenType::DELETE},
-        // Modifiers
-        {"mut",       TokenType::MUT},
         // Type qualifiers
-        {"ptr",       TokenType::PTR},
-        {"ref",       TokenType::REF},
-//        {"box",       TokenType::BOX},
+        {"mut",       TokenType::MUT},
         // Control flow
         {"if",        TokenType::IF},
         {"else",      TokenType::ELSE},
@@ -158,7 +150,6 @@ namespace xenon::tokens {
         {"continue",  TokenType::CONTINUE},
         // Module system
         {"import",    TokenType::IMPORT},
-        {"export",    TokenType::EXPORT},
         {"module",    TokenType::MODULE},
         // Value keywords
         {"true",      TokenType::TRUE},
@@ -195,9 +186,6 @@ namespace xenon::tokens {
             case TokenType::NEW:            return "new";
             case TokenType::DELETE:         return "delete";
             case TokenType::MUT:            return "mut";
-            case TokenType::PTR:            return "ptr";
-//            case TokenType::BOX:            return "box";
-            case TokenType::REF:            return "ref";
             case TokenType::IF:             return "if";
             case TokenType::ELSE:           return "else";
             case TokenType::WHILE:          return "while";
@@ -207,16 +195,17 @@ namespace xenon::tokens {
             case TokenType::BREAK:          return "break";
             case TokenType::CONTINUE:       return "continue";
             case TokenType::IMPORT:         return "import";
-            case TokenType::EXPORT:         return "export";
             case TokenType::MODULE:         return "module";
             case TokenType::TRUE:           return "true";
             case TokenType::FALSE:          return "false";
+            case TokenType::NULLPTR:        return "nullptr";
 
             // Identifiers & literals
             case TokenType::IDENTIFIER:         return "identifier";
             case TokenType::INT_LITERAL:        return "int literal";
             case TokenType::FLOAT_LITERAL:      return "float literal";
             case TokenType::STRING_LITERAL:     return "string literal";
+            case TokenType::CHARACTER_LITERAL:  return "character literal";
 
             // Operators
             case TokenType::EQ:          return "=";

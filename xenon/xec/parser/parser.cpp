@@ -40,22 +40,28 @@ namespace xenon::parser {
     }
 
     NamePtr Parser::parse_name() {
+        bool is_global = accept(TokenType::COLON_COLON);
+
         if (!check(TokenType::IDENTIFIER)) {
+            if (is_global) {
+                throw CompilerException("Expected identifier after leading '::' in name", peek().location, Severity::ERROR);
+            }
             throw CompilerException("Expected identifier for name", peek().location, Severity::ERROR);
         }
 
-        auto name = std::make_unique<Name>(loc(), peek().lexeme);
+        auto name = std::make_unique<Name>(loc(), peek().lexeme, nullptr, is_global);
         advance();
 
-        // Handle qualified names (e.g., Module::Submodule::Name)
+        Name* tail = name.get();
         while (match(TokenType::COLON_COLON)) {
             if (!check(TokenType::IDENTIFIER)) {
                 throw CompilerException("Expected identifier after '::' in qualified name", peek().location, Severity::ERROR);
             }
+
             auto next_name = std::make_unique<Name>(loc(), peek().lexeme);
             advance();
-            next_name->next = std::move(name);
-            name = std::move(next_name);
+            tail->next = std::move(next_name);
+            tail = tail->next.get();
         }
 
         return name;
@@ -64,30 +70,15 @@ namespace xenon::parser {
     TypeExprPtr Parser::parse_type_expression() {
         SourceLocation l = loc();
 
-        if (accept(TokenType::MUT)) {
-            if (accept(TokenType::REF)) {
-                return std::make_unique<ReferenceTypeExpr>(l, parse_type_expression(), true);
-            } else if (accept(TokenType::PTR)) {
-                return std::make_unique<PointerTypeExpr>(l, parse_type_expression(), true);
-//            } else if (accept(TokenType::BOX)) {
-//                return std::make_unique<PointerTypeExpr>(l, parse_type_expression(), true, true);
-            } else {
-                throw CompilerException(
-                    "Expected 'ref', 'ptr', or 'box' after 'mut'", loc(), Severity::ERROR);
-            }
+        if (accept(TokenType::STAR)) {
+            bool mut = accept(TokenType::MUT);
+            return std::make_unique<PointerTypeExpr>(l, parse_type_expression(), mut);
         }
 
-        if (accept(TokenType::REF)) {
-            return std::make_unique<ReferenceTypeExpr>(l, parse_type_expression(), false);
+        if (accept(TokenType::AMP)) {
+            bool mut = accept(TokenType::MUT);
+            return std::make_unique<ReferenceTypeExpr>(l, parse_type_expression(), mut);
         }
-
-        if (accept(TokenType::PTR)) {
-            return std::make_unique<PointerTypeExpr>(l, parse_type_expression(), false);
-        }
-
-//        if (accept(TokenType::BOX)) {
-//            return std::make_unique<PointerTypeExpr>(l, parse_type_expression(), false, true);
-//        }
 
         if (accept(TokenType::LBRACKET)) {
             auto element_type = parse_type_expression();
@@ -95,6 +86,7 @@ namespace xenon::parser {
             if (accept(TokenType::SEMICOLON)) {
                 size_expr = parse_expression();
             }
+            expect(TokenType::RBRACKET, "Expected ']' to close array type");
             return std::make_unique<ArrayTypeExpr>(l, std::move(element_type), std::move(size_expr));
         }
 
@@ -140,73 +132,78 @@ namespace xenon::parser {
     }
 
 
-    OperatorKind token_to_binary_op(TokenType type) {
+    // Helper functions for token conversion
+    BinaryOperatorKind token_to_binary_op(TokenType type) {
         switch (type) {
-            case TokenType::PLUS: return OperatorKind::ADD;
-            case TokenType::MINUS: return OperatorKind::SUBTRACT;
-            case TokenType::STAR: return OperatorKind::MULTIPLY;
-            case TokenType::SLASH: return OperatorKind::DIVIDE;
-            case TokenType::PERCENT: return OperatorKind::MODULO;
-            case TokenType::PLUS_EQ: return OperatorKind::ADD_ASSIGN;
-            case TokenType::MINUS_EQ: return OperatorKind::SUBTRACT_ASSIGN;
-            case TokenType::STAR_EQ: return OperatorKind::MULTIPLY_ASSIGN;
-            case TokenType::SLASH_EQ: return OperatorKind::DIVIDE_ASSIGN;
-            case TokenType::PERCENT_EQ: return OperatorKind::MODULO_ASSIGN;
-            case TokenType::AMP: return OperatorKind::BITWISE_AND;
-            case TokenType::PIPE: return OperatorKind::BITWISE_OR;
-            case TokenType::CARET: return OperatorKind::BITWISE_XOR;
-            case TokenType::LT_LT: return OperatorKind::SHIFT_LEFT;
-            case TokenType::GT_GT: return OperatorKind::SHIFT_RIGHT;
-            case TokenType::AMP_EQ: return OperatorKind::BITWISE_AND_ASSIGN;
-            case TokenType::PIPE_EQ: return OperatorKind::BITWISE_OR_ASSIGN;
-            case TokenType::CARET_EQ: return OperatorKind::BITWISE_XOR_ASSIGN;
-            case TokenType::LT_LT_EQ: return OperatorKind::SHIFT_LEFT_ASSIGN;
-            case TokenType::GT_GT_EQ: return OperatorKind::SHIFT_RIGHT_ASSIGN;
-            case TokenType::EQ_EQ: return OperatorKind::EQUAL;
-            case TokenType::BANG_EQ: return OperatorKind::NOT_EQUAL;
-            case TokenType::LT: return OperatorKind::LESS_THAN;
-            case TokenType::LTE: return OperatorKind::LESS_EQUAL;
-            case TokenType::GT: return OperatorKind::GREATER_THAN;
-            case TokenType::GTE: return OperatorKind::GREATER_EQUAL;
-            case TokenType::EQ: return OperatorKind::ASSIGN;
+            case TokenType::PLUS: return BinaryOperatorKind::ADD;
+            case TokenType::MINUS: return BinaryOperatorKind::SUBTRACT;
+            case TokenType::STAR: return BinaryOperatorKind::MULTIPLY;
+            case TokenType::SLASH: return BinaryOperatorKind::DIVIDE;
+            case TokenType::PERCENT: return BinaryOperatorKind::MODULO;
+            case TokenType::EQ_EQ: return BinaryOperatorKind::EQUAL;
+            case TokenType::BANG_EQ: return BinaryOperatorKind::NOT_EQUAL;
+            case TokenType::LT: return BinaryOperatorKind::LESS_THAN;
+            case TokenType::LTE: return BinaryOperatorKind::LESS_EQUAL;
+            case TokenType::GT: return BinaryOperatorKind::GREATER_THAN;
+            case TokenType::GTE: return BinaryOperatorKind::GREATER_EQUAL;
+            case TokenType::AND: return BinaryOperatorKind::LOGICAL_AND;
+            case TokenType::OR: return BinaryOperatorKind::LOGICAL_OR;
+            case TokenType::AMP: return BinaryOperatorKind::BITWISE_AND;
+            case TokenType::PIPE: return BinaryOperatorKind::BITWISE_OR;
+            case TokenType::CARET: return BinaryOperatorKind::BITWISE_XOR;
+            case TokenType::LT_LT: return BinaryOperatorKind::SHIFT_LEFT;
+            case TokenType::GT_GT: return BinaryOperatorKind::SHIFT_RIGHT;
             default:
                 throw std::runtime_error("Invalid token type for binary operator");
         }
     }
 
-    OperatorKind token_to_unary_op(TokenType type) {
+    AssignmentOperatorKind token_to_assignment_op(TokenType type) {
         switch (type) {
-            case TokenType::MINUS: return OperatorKind::NEGATE;
-            case TokenType::BANG:
-            case TokenType::TILDE: return OperatorKind::BITWISE_NOT;
-            case TokenType::AMP: return OperatorKind::ADDRESS_OF;
-            case TokenType::STAR: return OperatorKind::DEREFERENCE;
+            case TokenType::EQ: return AssignmentOperatorKind::ASSIGN;
+            case TokenType::PLUS_EQ: return AssignmentOperatorKind::ADD_ASSIGN;
+            case TokenType::MINUS_EQ: return AssignmentOperatorKind::SUBTRACT_ASSIGN;
+            case TokenType::STAR_EQ: return AssignmentOperatorKind::MULTIPLY_ASSIGN;
+            case TokenType::SLASH_EQ: return AssignmentOperatorKind::DIVIDE_ASSIGN;
+            case TokenType::PERCENT_EQ: return AssignmentOperatorKind::MODULO_ASSIGN;
+            case TokenType::AMP_EQ: return AssignmentOperatorKind::BITWISE_AND_ASSIGN;
+            case TokenType::PIPE_EQ: return AssignmentOperatorKind::BITWISE_OR_ASSIGN;
+            case TokenType::CARET_EQ: return AssignmentOperatorKind::BITWISE_XOR_ASSIGN;
+            case TokenType::LT_LT_EQ: return AssignmentOperatorKind::SHIFT_LEFT_ASSIGN;
+            case TokenType::GT_GT_EQ: return AssignmentOperatorKind::SHIFT_RIGHT_ASSIGN;
+            default:
+                throw std::runtime_error("Invalid token type for assignment operator");
+        }
+    }
+
+    UnaryOperatorKind token_to_unary_op(TokenType type) {
+        switch (type) {
+            case TokenType::MINUS: return UnaryOperatorKind::NEGATE;
+            case TokenType::BANG: return UnaryOperatorKind::LOGICAL_NOT;
+            case TokenType::TILDE: return UnaryOperatorKind::BITWISE_NOT;
+            case TokenType::STAR: return UnaryOperatorKind::DEREFERENCE;
+            case TokenType::AMP: return UnaryOperatorKind::ADDRESS_OF;
             default:
                 throw std::runtime_error("Invalid token type for unary operator");
         }
     }
 
-
-    ExpressionPtr Parser::parse_expression() { return parse_assignment(); }
+    // Parser methods
+    ExpressionPtr Parser::parse_expression() { 
+        return parse_assignment(); 
+    }
 
     ExpressionPtr Parser::parse_assignment() {
-        auto expr = parse_ternary();
+        auto lhs = parse_ternary();
 
-        switch (peek().type) {
-            case TokenType::EQ:
-            case TokenType::PLUS_EQ:   case TokenType::MINUS_EQ:
-            case TokenType::STAR_EQ:   case TokenType::SLASH_EQ:
-            case TokenType::PERCENT_EQ:
-            case TokenType::AMP_EQ:    case TokenType::PIPE_EQ:
-            case TokenType::CARET_EQ:
-            case TokenType::LT_LT_EQ:  case TokenType::GT_GT_EQ: {
-                SourceLocation l = loc();
-                OperatorKind op = token_to_binary_op(advance().type);
-                auto right = parse_assignment();
-                return std::make_unique<OperationExpr>(l, op, std::move(expr), std::move(right));
-            }
-            default: return expr;
+        if (is_assignment_token(peek().type)) {
+            SourceLocation l = loc();
+            auto op = token_to_assignment_op(advance().type);
+            auto rhs = parse_assignment();
+            return std::make_unique<AssignmentExpr>(l, op, std::move(lhs), std::move(rhs));
         }
+        
+        return lhs;
     }
 
     ExpressionPtr Parser::parse_ternary() {
@@ -224,8 +221,10 @@ namespace xenon::parser {
     ExpressionPtr Parser::parse_logical_or() {
         auto expr = parse_logical_and();
         while (peek().type == TokenType::OR) {
-            SourceLocation l = loc(); advance();
-            expr = std::make_unique<OperationExpr>(l, OperatorKind::LOGICAL_OR, std::move(expr), parse_logical_and());
+            SourceLocation l = loc(); 
+            advance();
+            expr = std::make_unique<BinaryOpExpr>(l, BinaryOperatorKind::LOGICAL_OR, 
+                                                std::move(expr), parse_logical_and());
         }
         return expr;
     }
@@ -233,8 +232,10 @@ namespace xenon::parser {
     ExpressionPtr Parser::parse_logical_and() {
         auto expr = parse_bitwise_or();
         while (peek().type == TokenType::AND) {
-            SourceLocation l = loc(); advance();
-            expr = std::make_unique<OperationExpr>(l, OperatorKind::LOGICAL_AND, std::move(expr), parse_bitwise_or());
+            SourceLocation l = loc(); 
+            advance();
+            expr = std::make_unique<BinaryOpExpr>(l, BinaryOperatorKind::LOGICAL_AND, 
+                                                std::move(expr), parse_bitwise_or());
         }
         return expr;
     }
@@ -242,8 +243,10 @@ namespace xenon::parser {
     ExpressionPtr Parser::parse_bitwise_or() {
         auto expr = parse_bitwise_xor();
         while (peek().type == TokenType::PIPE) {
-            SourceLocation l = loc(); advance();
-            expr = std::make_unique<OperationExpr>(l, OperatorKind::BITWISE_OR, std::move(expr), parse_bitwise_xor());
+            SourceLocation l = loc(); 
+            advance();
+            expr = std::make_unique<BinaryOpExpr>(l, BinaryOperatorKind::BITWISE_OR, 
+                                                std::move(expr), parse_bitwise_xor());
         }
         return expr;
     }
@@ -251,8 +254,10 @@ namespace xenon::parser {
     ExpressionPtr Parser::parse_bitwise_xor() {
         auto expr = parse_bitwise_and();
         while (peek().type == TokenType::CARET) {
-            SourceLocation l = loc(); advance();
-            expr = std::make_unique<OperationExpr>(l, OperatorKind::BITWISE_XOR, std::move(expr), parse_bitwise_and());
+            SourceLocation l = loc(); 
+            advance();
+            expr = std::make_unique<BinaryOpExpr>(l, BinaryOperatorKind::BITWISE_XOR, 
+                                                std::move(expr), parse_bitwise_and());
         }
         return expr;
     }
@@ -260,8 +265,10 @@ namespace xenon::parser {
     ExpressionPtr Parser::parse_bitwise_and() {
         auto expr = parse_equality();
         while (peek().type == TokenType::AMP) {
-            SourceLocation l = loc(); advance();
-            expr = std::make_unique<OperationExpr>(l, OperatorKind::BITWISE_AND, std::move(expr), parse_equality());
+            SourceLocation l = loc(); 
+            advance();
+            expr = std::make_unique<BinaryOpExpr>(l, BinaryOperatorKind::BITWISE_AND, 
+                                                std::move(expr), parse_equality());
         }
         return expr;
     }
@@ -270,8 +277,8 @@ namespace xenon::parser {
         auto expr = parse_comparison();
         while (peek().type == TokenType::EQ_EQ || peek().type == TokenType::BANG_EQ) {
             SourceLocation l = loc();
-            OperatorKind op = token_to_binary_op(advance().type);
-            expr = std::make_unique<OperationExpr>(l, op, std::move(expr), parse_comparison());
+            auto op = token_to_binary_op(advance().type);
+            expr = std::make_unique<BinaryOpExpr>(l, op, std::move(expr), parse_comparison());
         }
         return expr;
     }
@@ -281,8 +288,8 @@ namespace xenon::parser {
         while (peek().type == TokenType::LT  || peek().type == TokenType::LTE ||
             peek().type == TokenType::GT  || peek().type == TokenType::GTE) {
             SourceLocation l = loc();
-            OperatorKind op = token_to_binary_op(advance().type);
-            expr = std::make_unique<OperationExpr>(l, op, std::move(expr), parse_shift());
+            auto op = token_to_binary_op(advance().type);
+            expr = std::make_unique<BinaryOpExpr>(l, op, std::move(expr), parse_shift());
         }
         return expr;
     }
@@ -291,8 +298,8 @@ namespace xenon::parser {
         auto expr = parse_term();
         while (peek().type == TokenType::LT_LT || peek().type == TokenType::GT_GT) {
             SourceLocation l = loc();
-            OperatorKind op = token_to_binary_op(advance().type);
-            expr = std::make_unique<OperationExpr>(l, op, std::move(expr), parse_term());
+            auto op = token_to_binary_op(advance().type);
+            expr = std::make_unique<BinaryOpExpr>(l, op, std::move(expr), parse_term());
         }
         return expr;
     }
@@ -301,8 +308,8 @@ namespace xenon::parser {
         auto expr = parse_factor();
         while (peek().type == TokenType::PLUS || peek().type == TokenType::MINUS) {
             SourceLocation l = loc();
-            OperatorKind op = token_to_binary_op(advance().type);
-            expr = std::make_unique<OperationExpr>(l, op, std::move(expr), parse_factor());
+            auto op = token_to_binary_op(advance().type);
+            expr = std::make_unique<BinaryOpExpr>(l, op, std::move(expr), parse_factor());
         }
         return expr;
     }
@@ -313,26 +320,49 @@ namespace xenon::parser {
             peek().type == TokenType::SLASH  ||
             peek().type == TokenType::PERCENT) {
             SourceLocation l = loc();
-            OperatorKind op = token_to_binary_op(advance().type);
-            expr = std::make_unique<OperationExpr>(l, op, std::move(expr), parse_unary());
+            auto op = token_to_binary_op(advance().type);
+            expr = std::make_unique<BinaryOpExpr>(l, op, std::move(expr), parse_unary());
         }
         return expr;
     }
 
     ExpressionPtr Parser::parse_unary() {
-        switch (peek().type) {
+        if (is_unary_token(peek().type)) {
+            SourceLocation l = loc();
+            auto op = token_to_unary_op(advance().type);
+            return std::make_unique<UnaryOpExpr>(l, op, parse_unary());
+        }
+        
+        return parse_postfix();
+    }
+
+    // Helper functions
+    bool Parser::is_assignment_token(TokenType type) {
+        switch (type) {
+            case TokenType::EQ:
+            case TokenType::PLUS_EQ:   case TokenType::MINUS_EQ:
+            case TokenType::STAR_EQ:   case TokenType::SLASH_EQ:
+            case TokenType::PERCENT_EQ:
+            case TokenType::AMP_EQ:    case TokenType::PIPE_EQ:
+            case TokenType::CARET_EQ:
+            case TokenType::LT_LT_EQ:  case TokenType::GT_GT_EQ:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool Parser::is_unary_token(TokenType type) {
+        switch (type) {
             case TokenType::MINUS:
             case TokenType::PLUS:
             case TokenType::BANG:
             case TokenType::TILDE:
             case TokenType::STAR:
-            case TokenType::AMP: {
-                SourceLocation l = loc();
-                OperatorKind op = token_to_unary_op(advance().type);
-                return std::make_unique<OperationExpr>(l, op, nullptr, parse_unary());
-            }
+            case TokenType::AMP:
+                return true;
             default:
-                return parse_postfix();
+                return false;
         }
     }
 
@@ -355,7 +385,8 @@ namespace xenon::parser {
             else if (peek().type == TokenType::LBRACE && expr->kind == ASTNode::NodeKind::NAME) {
                 auto struct_name = std::unique_ptr<Name>(
                     static_cast<Name*>(expr.release()));
-                expr = parse_class_literal(l, std::move(struct_name));
+                auto type_expr = std::make_unique<NamedTypeExpr>(l, std::move(struct_name));
+                expr = parse_class_literal(l, std::move(type_expr));
             }
             else if (peek().type == TokenType::LBRACKET) {
                 advance();
@@ -383,7 +414,6 @@ namespace xenon::parser {
                     if (lexeme.size() >= known_suffix.size() &&
                         lexeme.rfind(known_suffix) == lexeme.size() - known_suffix.size()) {
                         suffix = parse_integer_suffix(known_suffix);
-                        std::cout << known_suffix << "@" << loc().format() << ": '" << lexeme << "'" << std::endl;
                         break;
                     }
                 }
@@ -460,11 +490,22 @@ namespace xenon::parser {
 
     ExpressionPtr Parser::parse_new_expr() {
         SourceLocation l = loc();
-        auto alloc = parse_primary();
-        return std::make_unique<NewExpr>(l, std::move(alloc));
+        auto alloc_type = parse_type_expression();
+
+        std::vector<ExpressionPtr> init_args;
+        if (accept(TokenType::LBRACE)) {
+            if (!check(TokenType::RBRACE)) {
+                do {
+                    init_args.push_back(parse_expression());
+                } while (accept(TokenType::COMMA));
+            }
+            expect(TokenType::RBRACE, "Expected '}' to close object initialiser");
+        }
+
+        return std::make_unique<NewExpr>(l, std::move(alloc_type), std::move(init_args));
     }
 
-    ExpressionPtr Parser::parse_class_literal(SourceLocation l, NamePtr struct_name) {
+    ExpressionPtr Parser::parse_class_literal(SourceLocation l, TypeExprPtr type_expr) {
         expect(TokenType::LBRACE, "Expected '{' to start class literal");
         std::vector<ExpressionPtr> args;
         if (!check(TokenType::RBRACE)) {
@@ -473,7 +514,7 @@ namespace xenon::parser {
             } while (accept(TokenType::COMMA));
         }
         expect(TokenType::RBRACE, "Expected '}' to close class literal");
-        return std::make_unique<LiteralClass>(l, std::move(struct_name), std::move(args));
+        return std::make_unique<LiteralClass>(l, std::move(type_expr), std::move(args));
     }
 
     /*
@@ -658,11 +699,7 @@ namespace xenon::parser {
         BlockPtr body = nullptr;
         if (check(TokenType::LBRACE)) body = parse_block();
 
-        std::optional<OperatorKind> op = lookup_operator_overload(op_lexeme, params.size() == 2);
-        if (!op.has_value()) throw CompilerException(
-            std::format("Invalid {} operator '{}'", (params.size() == 2 ? "binary" : "unary"), op_lexeme),
-            l, Severity::ERROR);
-        return std::make_unique<OperatorOverloadDecl>(l, op.value(), std::move(params), std::move(return_type), std::move(body), is_public);
+        return std::make_unique<OperatorOverloadDecl>(l, op_lexeme, std::move(params), std::move(return_type), std::move(body), is_public);
     }
 
     // <name>: <type_expr>;
@@ -676,26 +713,6 @@ namespace xenon::parser {
         return std::make_unique<ClassFieldDecl>(l, std::move(name), std::move(type_expr), is_public);
     }
 
-    NamespaceVarDeclPtr Parser::parse_namespace_var_declaration(bool is_public) {
-        SourceLocation l = loc();
-        expect(TokenType::LET, "Expected 'let' keyword for namespace variable declaration");
-        bool is_mutable = accept(TokenType::MUT);
-        auto name = expect(TokenType::IDENTIFIER, "Expected namespace variable name after 'let'").lexeme;
-        TypeExprPtr type_expr = nullptr;
-        ExpressionPtr init_expr = nullptr;
-
-        if (accept(TokenType::COLON)) {
-            type_expr = parse_type_expression();
-        }
-
-        if (accept(TokenType::EQ)) {
-            init_expr = parse_expression();
-        }
-
-        expect(TokenType::SEMICOLON, "Expected ';' after namespace variable declaration");
-        return std::make_unique<NamespaceVarDecl>(
-            l, std::move(name), std::move(type_expr), std::move(init_expr), is_mutable, is_public);
-    }
 
     ClassMethodDeclPtr Parser::parse_class_method_declaration(bool is_public, bool is_static) {
         SourceLocation l = loc();
@@ -744,11 +761,10 @@ namespace xenon::parser {
 
         expect(TokenType::LBRACE, "Expected '{' to start impl block");
 
-        std::vector<NamespaceVarDeclPtr> static_vars;
+        std::vector<VariableDeclPtr> static_vars;
         std::vector<ClassMethodDeclPtr> methods;
         std::vector<OperatorOverloadDeclPtr> operator_overloads;
         std::vector<ClassMethodDeclPtr> constructors;
-        ClassMethodDeclPtr destructor = nullptr;
 
         while (!check(TokenType::RBRACE) && !is_at_end()) {
             bool member_public = false;
@@ -764,23 +780,15 @@ namespace xenon::parser {
             if (check(TokenType::LET)) {
                 if (!is_static) {
                     throw CompilerException(
-                        "Expected 'static' before namespace variable declaration in impl block",
+                        "Expected 'static' before static variable declaration in impl block",
                         peek().location, Severity::ERROR);
                 }
-                static_vars.push_back(parse_namespace_var_declaration(member_public));
+                static_vars.push_back(parse_variable_declaration(member_public));
                 continue;
             }
 
             if (check(TokenType::FUNC)) {
-                auto method = parse_class_method_declaration(member_public, is_static);
-                if (method->name == "drop") {
-                    if (is_static) {
-                        throw CompilerException("Static destructor is not allowed", peek().location, Severity::ERROR);
-                    }
-                    destructor = std::move(method);
-                } else {
-                    methods.push_back(std::move(method));
-                }
+                methods.push_back(parse_class_method_declaration(member_public, is_static));
                 continue;
             }
 
@@ -790,7 +798,7 @@ namespace xenon::parser {
         expect(TokenType::RBRACE, "Expected '}' to close impl block");
         return std::make_unique<ClassImplementationDecl>(
             l, std::move(class_name), std::move(static_vars), std::move(methods),
-            std::move(operator_overloads), std::move(constructors), std::move(destructor));
+            std::move(operator_overloads), std::move(constructors));
     }
 
 

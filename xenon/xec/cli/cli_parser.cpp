@@ -20,7 +20,7 @@ Xenon Compiler - build and manage Xenon projects.
 Commands:
   build              Build the project (default)
   check              Check the project without building
-  init               Initialize a new project
+  init               initialise a new project
 
 Options:
   -h, --help             Show this help message

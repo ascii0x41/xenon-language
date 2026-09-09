@@ -139,12 +139,13 @@ func main() -> i32 {
         }
 
         std::unordered_map<std::string, Module>* current = &modules_;
-        for (const auto& part : split_name(name)) {
-            auto it = current->find(part);
+        const auto parts = split_name(name);
+        for (size_t i = 0; i < parts.size(); ++i) {
+            auto it = current->find(parts[i]);
             if (it == current->end()) {
                 return nullptr;
             }
-            if (part == split_name(name).back()) {
+            if (i == parts.size() - 1) {
                 return &it->second;
             }
             current = &it->second.children;
@@ -184,6 +185,14 @@ func main() -> i32 {
             common::SourceLocation{0, 0, importer_path.string()});
     }
 
+    // Returns true if an unresolved dependency or circular import was found
+    // anywhere in this module's subtree (i.e. "found a problem, stop").
+    // Every exit path — success or failure — falls through to the cleanup
+    // at the bottom so that `path`/`path_index` never retain stale entries
+    // and `state[name]` always ends up at 2 (fully visited). Leaving a
+    // module stuck at 1 (in-progress) after an unrelated error would make
+    // it look like it's still on the DFS stack the next time some other
+    // module imports it, producing a phantom circular-dependency report.
     bool ModuleNamespaceTree::dfs_validate_module(
         const std::string& name,
         std::unordered_map<std::string, int>& state,
@@ -192,19 +201,22 @@ func main() -> i32 {
     {
         Module* node = get_module(name);
         if (!node) {
-            return false;
+            return true;
         }
 
         state[name] = 1;
         path_index[name] = path.size();
         path.push_back(name);
 
+        bool found_error = false;
+
         if (node->ast) {
             for (const auto& dep : node->ast->dependencies) {
                 const Module* dep_module = get_module(dep);
                 if (!dep_module) {
                     report_unresolved_dependency(name, dep, node->path);
-                    return false;
+                    found_error = true;
+                    break;
                 }
 
                 const auto dep_state = state.find(dep);
@@ -228,12 +240,14 @@ func main() -> i32 {
                     g_diagnostics.error(
                         std::format("circular module dependency detected:\n  {}", cycle_text),
                         common::SourceLocation{0, 0, node->path.string()});
-                    return false;
+                    found_error = true;
+                    break;
                 }
 
                 if (dep_state == state.end() || dep_state->second == 0) {
                     if (dfs_validate_module(dep, state, path, path_index)) {
-                        return false;
+                        found_error = true;
+                        break;
                     }
                 }
             }
@@ -242,7 +256,7 @@ func main() -> i32 {
         path.pop_back();
         path_index.erase(name);
         state[name] = 2;
-        return false;
+        return found_error;
     }
 
     bool ModuleNamespaceTree::is_valid() {
@@ -362,16 +376,16 @@ func main() -> i32 {
         if (!cli.output_name.empty()) {
             merged.output_name = cli.output_name;
         }
-        if (cli.output_dir != "build/") {
+        if (cli.output_dir_explicit) {
             merged.output_dir = cli.output_dir;
         }
-        if (cli.target_triple != "x86_64-linux") {
+        if (cli.target_triple_explicit) {
             merged.target_triple = cli.target_triple;
         }
-        if (cli.opt_level != config::OptimisationLevel::DEBUG) {
+        if (cli.opt_level_explicit) {
             merged.opt_level = cli.opt_level;
         }
-        if (cli.warning_level != config::WarningLevel::WARN) {
+        if (cli.warning_level_explicit) {
             merged.warning_level = cli.warning_level;
         }
 
@@ -539,7 +553,7 @@ func main() -> i32 {
         }
 
         if (fs::exists(toml_path)) {
-            g_diagnostics.error("xenon.toml already exists in the current directory.");
+            g_diagnostics.warning("xenon.toml already exists in the current directory.");
         } else {
             std::ofstream toml_file(toml_path);
             if (!toml_file) {
@@ -550,7 +564,7 @@ func main() -> i32 {
         }
 
         if (fs::exists(main_path)) {
-            g_diagnostics.error("src/main.xe already exists.");
+            g_diagnostics.warning("src/main.xe already exists.");
         } else {
             std::ofstream main_file(main_path);
             if (!main_file) {

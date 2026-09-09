@@ -32,7 +32,6 @@ namespace xenon::lexer {
             view = owned_lexemes_.back();
         }
         tokens_.emplace_back(type, view, SourceLocation(line_, token_start_column(), file_));
-        std::cout << "Added token: " << view << std::endl;
     }
 
     uint32_t Lexer::token_start_column() const {

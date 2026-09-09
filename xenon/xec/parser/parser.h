@@ -93,11 +93,14 @@ namespace xenon::parser {
         ExpressionPtr parse_postfix();
         ExpressionPtr parse_primary();
 
+        bool is_assignment_token(TokenType type);
+        bool is_unary_token(TokenType type);
+
         // -- Primary helpers ------------------------------------------------------
 
         ExpressionPtr parse_array_literal();
         ExpressionPtr parse_new_expr();
-        ExpressionPtr parse_class_literal(SourceLocation l, NamePtr struct_name);
+        ExpressionPtr parse_class_literal(SourceLocation l, TypeExprPtr type_expr);
 //        ExpressionPtr parse_box_expr();
 
         // -- Statements -----------------------------------------------------------
@@ -116,7 +119,6 @@ namespace xenon::parser {
 
         ClassFieldDeclPtr parse_class_field_declaration(bool is_public = false);
         ClassMethodDeclPtr parse_class_method_declaration(bool is_public = false, bool is_static = false);
-        NamespaceVarDeclPtr parse_namespace_var_declaration(bool is_public = false);
 
         ClassStructureDeclPtr parse_class_structure_declaration(bool is_public = false);
         ClassImplementationDeclPtr parse_class_implementation_declaration();

@@ -105,7 +105,7 @@ namespace xenon {
     struct Diagnostic {
         Severity severity;
         std::string message;
-        // 3. Initialize driver
+        // 3. initialise driver
         common::SourceLocation location;
 
         // Format as  "file:line:col: severity: message", followed by the
@@ -197,27 +197,27 @@ namespace xenon {
         }
 
             void note(std::string msg, common::SourceLocation l = { 0, 0, "xec" }) {
-                push(Severity::NOTE, std::move(msg), std::move(l));
+                push(Severity::NOTE, std::move(msg), l);
             }
 
             void warning(std::string msg, common::SourceLocation l = { 0, 0, "xec" }) {
-                push(Severity::WARNING, std::move(msg), std::move(l));
+                push(Severity::WARNING, std::move(msg), l);
                 ++warning_count_;
             }
 
             void error(std::string msg, common::SourceLocation l = { 0, 0, "xec" }) {
-                push(Severity::ERROR, std::move(msg), std::move(l));
+                push(Severity::ERROR, std::move(msg), l);
                 ++error_count_;
             }
 
             void syntax_error(std::string msg, common::SourceLocation l = { 0, 0, "xec" }) {
-                push(Severity::ERROR, std::move(msg), std::move(l));
+                push(Severity::ERROR, std::move(msg), l);
                 ++error_count_;
             }
 
 
             void fatal(std::string msg, common::SourceLocation l = { 0, 0, "xec" }) {
-                push(Severity::FATAL, std::move(msg), std::move(l));
+                push(Severity::FATAL, std::move(msg), l);
                 ++error_count_;
             }
     };

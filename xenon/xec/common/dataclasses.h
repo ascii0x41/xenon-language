@@ -121,10 +121,21 @@ namespace xenon::config {
         
         // ---- From TOML or CLI ----
         fs::path output_dir = "build/";
-        std::string output_name;        // derived from project_name if empty
+        std::string output_name;        // derived from project_name if empty; empty is unambiguous, no flag needed
         std::string target_triple = "x86_64-linux";
         OptimisationLevel opt_level = OptimisationLevel::DEBUG;
         WarningLevel warning_level = WarningLevel::WARN;
+
+        // Set by the CLI arg parser when the corresponding flag is actually
+        // passed on the command line. Needed because these fields have
+        // non-empty/non-zero defaults, so "value equals the default" can't be
+        // used to tell "user didn't pass this flag" apart from "user passed
+        // this flag with the default value" — the driver's TOML/CLI merge
+        // needs the real answer to decide whether to let TOML override it.
+        bool output_dir_explicit = false;
+        bool target_triple_explicit = false;
+        bool opt_level_explicit = false;
+        bool warning_level_explicit = false;
         
         // ---- CLI only ----
         Command command = Command::BUILD;

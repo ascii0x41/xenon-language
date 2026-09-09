@@ -15,8 +15,8 @@ namespace xenon::ast {
             // Literals
             LITERAL_INT,
             LITERAL_FLOAT,
-            LITERAL_COMPLEX,
             LITERAL_STRING,
+            LITERAL_CHAR,
             LITERAL_BOOL,
             LITERAL_ARRAY,
             LITERAL_NULLPTR,
@@ -35,7 +35,9 @@ namespace xenon::ast {
             ARRAY_TYPE,
 
             // Operations
-            OPERATION_EXPR,
+            BINARY_OP_EXPR,
+            UNARY_OP_EXPR,
+            ASSIGNMENT_EXPR,
             TERNARY_EXPR,
 
             // Allocation
@@ -62,7 +64,6 @@ namespace xenon::ast {
             FUNCTION_DECL,
             OPERATOR_OVERLOAD_DECL,
             CLASS_FIELD_DECL,
-            NAMESPACE_VARIABLE_DECL,
             CLASS_METHOD_DECL,
             CLASS_STRUCTURE_DECL,
             CLASS_IMPLEMENTATION_DECL,
@@ -147,6 +148,12 @@ namespace xenon::ast {
             : Expression(NodeKind::LITERAL_STRING, std::move(l)), value(std::move(v)) {}
     };
 
+    struct LiteralChar : public Expression {
+        std::string value;
+        explicit LiteralChar(SourceLocation l, std::string v)
+            : Expression(NodeKind::LITERAL_CHAR, std::move(l)), value(std::move(v)) {}
+    };
+
     struct LiteralBool : public Expression {
         bool value;
         explicit LiteralBool(SourceLocation l, bool v)
@@ -174,17 +181,22 @@ namespace xenon::ast {
     struct Name : public Expression {
         std::string identifier;
         NamePtr next;   // "::" chain
-        
-        Name(SourceLocation l, std::string id, NamePtr nxt = nullptr)
-            : Expression(NodeKind::NAME, l), identifier(std::move(id)), next(std::move(nxt)) {}
-        
-        bool is_qualified() const { return next != nullptr; }
+        bool is_global = false;
+
+        Name(SourceLocation l, std::string id, NamePtr nxt = nullptr, bool global = false)
+            : Expression(NodeKind::NAME, l), identifier(std::move(id)), next(std::move(nxt)), is_global(global) {}
+
+        bool is_qualified() const { return next != nullptr || is_global; }
         std::string to_string() const {
-            if (next) return identifier + "::" + next->to_string();
-            return identifier;
+            std::string value = identifier;
+            if (next) value += "::" + next->to_string();
+            return is_global ? "::" + value : value;
         }
     };
 
+
+    struct TypeExpression;
+    using TypeExprPtr = std::unique_ptr<TypeExpression>;
 
     struct MemberAccessExpr : public Expression {
         ExpressionPtr object;
@@ -194,10 +206,10 @@ namespace xenon::ast {
     };
 
     struct LiteralClass : public Expression {
-        NamePtr struct_name;
+        TypeExprPtr type_expr;
         std::vector<ExpressionPtr> args;
-        LiteralClass(SourceLocation l, NamePtr n, std::vector<ExpressionPtr> a)
-            : Expression(NodeKind::LITERAL_CLASS, std::move(l)), struct_name(std::move(n)), args(std::move(a)) {}
+        LiteralClass(SourceLocation l, TypeExprPtr t, std::vector<ExpressionPtr> a)
+            : Expression(NodeKind::LITERAL_CLASS, std::move(l)), type_expr(std::move(t)), args(std::move(a)) {}
     };
 
     struct CallExpr : public Expression {
@@ -223,8 +235,6 @@ namespace xenon::ast {
         explicit TypeExpression(NodeKind k, SourceLocation l)
             : ASTNode(k, l) {}
     };
-
-    using TypeExprPtr = std::unique_ptr<TypeExpression>;
 
     // One type expression node for all named types
     struct NamedTypeExpr : public TypeExpression {
@@ -263,49 +273,69 @@ namespace xenon::ast {
 
     // -- Operations ---------------------------------------------------------------
 
-    enum class OperatorKind {
-        ADD,
-        SUBTRACT,
-        MULTIPLY,
-        DIVIDE,
-        MODULO,
-        ADD_ASSIGN,
-        SUBTRACT_ASSIGN,
-        MULTIPLY_ASSIGN,
-        DIVIDE_ASSIGN,
-        MODULO_ASSIGN,
-        BITWISE_AND,
-        BITWISE_OR,
-        BITWISE_XOR,
-        SHIFT_LEFT,
-        SHIFT_RIGHT,
-        BITWISE_AND_ASSIGN,
-        BITWISE_OR_ASSIGN,
-        BITWISE_XOR_ASSIGN,
-        SHIFT_LEFT_ASSIGN,
-        SHIFT_RIGHT_ASSIGN,
-        EQUAL,
-        NOT_EQUAL,
-        LESS_THAN,
-        LESS_EQUAL,
-        GREATER_THAN,
-        GREATER_EQUAL,
-        LOGICAL_AND,
-        LOGICAL_OR,
-        LOGICAL_NOT,
-        ASSIGN,                     // =
-        NEGATE, BITWISE_NOT, ADDRESS_OF, DEREFERENCE,
-        INDEX_READ
+    enum class UnaryOperatorKind {
+        NEGATE,           // -x
+        BITWISE_NOT,      // ~x
+        LOGICAL_NOT,      // !x
+        ADDRESS_OF,       // &x
+        DEREFERENCE,      // *x
     };
 
-    struct OperationExpr : public Expression {
-        OperatorKind op;
-        ExpressionPtr  lhs; // nullptr when unary
-        ExpressionPtr  rhs;
+    enum class BinaryOperatorKind {
+        // Arithmetic
+        ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO,
+        
+        // Comparison
+        EQUAL, NOT_EQUAL, LESS_THAN, LESS_EQUAL, GREATER_THAN, GREATER_EQUAL,
+        
+        // Logical
+        LOGICAL_AND, LOGICAL_OR,
+        
+        // Bitwise
+        BITWISE_AND, BITWISE_OR, BITWISE_XOR, SHIFT_LEFT, SHIFT_RIGHT,
+    };
 
-        bool is_binary() const { return lhs != nullptr; }
-        OperationExpr(SourceLocation l, OperatorKind o, ExpressionPtr left, ExpressionPtr right)
-            : Expression(NodeKind::OPERATION_EXPR, std::move(l)), op(o), lhs(std::move(left)), rhs(std::move(right)) {}
+    enum class AssignmentOperatorKind {
+        ASSIGN,               // =
+        ADD_ASSIGN,           // +=
+        SUBTRACT_ASSIGN,      // -=
+        MULTIPLY_ASSIGN,      // *=
+        DIVIDE_ASSIGN,        // /=
+        MODULO_ASSIGN,        // %=
+        BITWISE_AND_ASSIGN,   // &=
+        BITWISE_OR_ASSIGN,    // |=
+        BITWISE_XOR_ASSIGN,   // ^=
+        SHIFT_LEFT_ASSIGN,    // <<=
+        SHIFT_RIGHT_ASSIGN,   // >>=
+    };
+
+    struct UnaryOpExpr : Expression {
+        UnaryOperatorKind op;
+        ExpressionPtr operand;
+        
+        UnaryOpExpr(SourceLocation l, UnaryOperatorKind o, ExpressionPtr operand_)
+            : Expression(NodeKind::UNARY_OP_EXPR, std::move(l))
+            , op(o), operand(std::move(operand_)) {}
+    };
+
+    struct BinaryOpExpr : Expression {
+        BinaryOperatorKind op;
+        ExpressionPtr lhs;
+        ExpressionPtr rhs;
+        
+        BinaryOpExpr(SourceLocation l, BinaryOperatorKind o, ExpressionPtr left, ExpressionPtr right)
+            : Expression(NodeKind::BINARY_OP_EXPR, std::move(l))
+            , op(o), lhs(std::move(left)), rhs(std::move(right)) {}
+    };
+
+    struct AssignmentExpr : Expression {
+        AssignmentOperatorKind op;
+        ExpressionPtr lhs;   // Must be assignable (variable, index, deref, etc.)
+        ExpressionPtr rhs;
+        
+        AssignmentExpr(SourceLocation l, AssignmentOperatorKind o, ExpressionPtr left, ExpressionPtr right)
+            : Expression(NodeKind::ASSIGNMENT_EXPR, std::move(l))
+            , op(o), lhs(std::move(left)), rhs(std::move(right)) {}
     };
 
     struct TernaryExpr : public Expression {
@@ -322,9 +352,11 @@ namespace xenon::ast {
     // -- Allocation ---------------------------------------------------------------
 
     struct NewExpr : public Expression {
-        ExpressionPtr expr;
-        NewExpr(SourceLocation l, ExpressionPtr e)
-            : Expression(NodeKind::NEW_EXPR, std::move(l)), expr(std::move(e)) {}
+        TypeExprPtr alloc_type;
+        std::vector<ExpressionPtr> initialiser_args;
+
+        NewExpr(SourceLocation l, TypeExprPtr type, std::vector<ExpressionPtr> init = {})
+            : Expression(NodeKind::NEW_EXPR, std::move(l)), alloc_type(std::move(type)), initialiser_args(std::move(init)) {}
     };
 
     struct DeleteStmt : public Statement {
@@ -413,68 +445,20 @@ namespace xenon::ast {
 
     using FunctionDeclPtr = std::unique_ptr<FunctionDecl>;
 
-    constexpr std::array<std::pair<const char*, OperatorKind>, 27> OPERATOR_MAP = {{
-        {"+", OperatorKind::ADD},
-        {"-", OperatorKind::SUBTRACT},
-        {"*", OperatorKind::MULTIPLY},
-        {"/", OperatorKind::DIVIDE},
-        {"%", OperatorKind::MODULO},
-        {"+=", OperatorKind::ADD_ASSIGN},
-        {"-=", OperatorKind::SUBTRACT_ASSIGN},
-        {"*=", OperatorKind::MULTIPLY_ASSIGN},
-        {"/=", OperatorKind::DIVIDE_ASSIGN},
-        {"%=", OperatorKind::MODULO_ASSIGN},
-        {"&", OperatorKind::BITWISE_AND},
-        {"|", OperatorKind::BITWISE_OR},
-        {"^", OperatorKind::BITWISE_XOR},
-        {"<<", OperatorKind::SHIFT_LEFT},
-        {">>", OperatorKind::SHIFT_RIGHT},
-        {"&=", OperatorKind::BITWISE_AND_ASSIGN},
-        {"|=", OperatorKind::BITWISE_OR_ASSIGN},
-        {"^=", OperatorKind::BITWISE_XOR_ASSIGN},
-        {"<<=", OperatorKind::SHIFT_LEFT_ASSIGN},
-        {">>=", OperatorKind::SHIFT_RIGHT_ASSIGN},
-        {"==", OperatorKind::EQUAL},
-        {"!=", OperatorKind::NOT_EQUAL},
-        {"<",  OperatorKind::LESS_THAN},
-        {"<=", OperatorKind::LESS_EQUAL},
-        {">",  OperatorKind::GREATER_THAN},
-        {">=", OperatorKind::GREATER_EQUAL},
-        {"[]", OperatorKind::INDEX_READ},
-    }};
-
-    constexpr std::array<std::pair<const char*, OperatorKind>, 2> UNARY_OPERATOR_MAP = {{
-        {"-", OperatorKind::NEGATE},
-        {"~", OperatorKind::BITWISE_NOT},
-    }};
-
-    constexpr std::optional<OperatorKind> lookup_operator_overload(std::string_view op, bool is_binary) {
-        if (is_binary) {
-            for (const auto& [key, value] : OPERATOR_MAP) {
-                if (key == op) return value;
-            }
-        } else {
-            for (const auto& [key, value] : UNARY_OPERATOR_MAP) {
-                if (key == op) return value;
-            }
-        }
-        return std::nullopt;
-    }
-
 
     struct OperatorOverloadDecl : public Declaration {
-        OperatorKind op_kind;
+        std::string op_lexeme;
         std::vector<VariableDeclPtr> parameters;
         TypeExprPtr return_type;
         BlockPtr body;
         bool is_public;
-        OperatorOverloadDecl(SourceLocation l, OperatorKind op,
+        OperatorOverloadDecl(SourceLocation l, std::string oplex,
                             std::vector<VariableDeclPtr> params,
                             TypeExprPtr ret_type = nullptr,
                             BlockPtr b = nullptr,
                             bool p = false)
             : Declaration(NodeKind::OPERATOR_OVERLOAD_DECL, std::move(l)),
-            op_kind(op), parameters(std::move(params)),
+            op_lexeme(std::move(oplex)), parameters(std::move(params)),
             return_type(std::move(ret_type)), body(std::move(b)), is_public(p) {}
     };
 
@@ -493,23 +477,6 @@ namespace xenon::ast {
 
     using ClassFieldDeclPtr = std::unique_ptr<ClassFieldDecl>;
 
-    struct NamespaceVarDecl : public Declaration {
-        std::string name;
-        TypeExprPtr type_expr;
-        ExpressionPtr initialiser;
-        bool is_mut;
-        bool is_public;
-        NamespaceVarDecl(SourceLocation l, std::string n,
-                        TypeExprPtr t = nullptr,
-                        ExpressionPtr i = nullptr,
-                        bool m = false,
-                        bool p = false)
-            : Declaration(NodeKind::NAMESPACE_VARIABLE_DECL, std::move(l)),
-            name(std::move(n)), type_expr(std::move(t)),
-            initialiser(std::move(i)), is_mut(m), is_public(p) {}
-    };
-
-    using NamespaceVarDeclPtr = std::unique_ptr<NamespaceVarDecl>;
 
     struct ClassMethodDecl : public Declaration {
         std::string name;
@@ -547,22 +514,21 @@ namespace xenon::ast {
 
     struct ClassImplementationDecl : public Declaration {
         NamePtr class_name;
-        std::vector<NamespaceVarDeclPtr> static_vars;
+        std::vector<VariableDeclPtr> static_vars;
         std::vector<ClassMethodDeclPtr> methods;
         std::vector<OperatorOverloadDeclPtr> operator_overloads;
         std::vector<ClassMethodDeclPtr> constructors;
         ClassMethodDeclPtr destructor;
 
         ClassImplementationDecl(SourceLocation l, NamePtr n,
-                                std::vector<NamespaceVarDeclPtr> sv = {},
+                                std::vector<VariableDeclPtr> sv = {},
                                 std::vector<ClassMethodDeclPtr> m = {},
                                 std::vector<OperatorOverloadDeclPtr> o = {},
-                                std::vector<ClassMethodDeclPtr> c = {},
-                                ClassMethodDeclPtr d = nullptr)
+                                std::vector<ClassMethodDeclPtr> c = {})
             : Declaration(NodeKind::CLASS_IMPLEMENTATION_DECL, std::move(l)),
             class_name(std::move(n)), static_vars(std::move(sv)),
             methods(std::move(m)), operator_overloads(std::move(o)),
-            constructors(std::move(c)), destructor(std::move(d)) {}
+            constructors(std::move(c)) {}
     };
 
     using ClassImplementationDeclPtr = std::unique_ptr<ClassImplementationDecl>;

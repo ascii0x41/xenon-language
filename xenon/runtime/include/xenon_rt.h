@@ -104,7 +104,7 @@ XENON_ABI XENON_NOTHROW void xenon_println(XENON_STRING str);
 // Program Entry Point
 // ============================================================================
 
-// This is the actual entry point. It initializes the runtime, then calls
+// This is the actual entry point. It initialises the runtime, then calls
 // into LLVM IR generated code. The user's program should define:
 //
 //   void xenon_program_main(void)
