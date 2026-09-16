@@ -34,6 +34,7 @@ namespace xenon::driver {
 
         bool is_valid();
         size_t size() const { return modules_.size(); }
+        std::vector<std::string> all_module_names() const;
 
         const std::unordered_map<std::string, Module>& modules() const { return modules_; }
         std::unordered_map<std::string, Module>& modules() { return modules_; }

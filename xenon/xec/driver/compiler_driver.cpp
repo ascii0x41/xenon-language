@@ -119,7 +119,7 @@ func main() -> i32 {
             return;
         }
 
-        const auto parts = split_name(module.ast->module_name);
+        const auto parts = module.ast->module_name.components;
         std::unordered_map<std::string, Module>* current = &modules_;
 
         for (size_t i = 0; i < parts.size(); ++i) {
@@ -131,6 +131,12 @@ func main() -> i32 {
             }
             current = &node.children;
         }
+    }
+
+    std::vector<std::string> ModuleNamespaceTree::all_module_names() const {
+        std::vector<std::string> out;
+        collect_module_names(modules_, out);
+        return out;
     }
 
     Module* ModuleNamespaceTree::get_module(const std::string& name) {
@@ -212,22 +218,23 @@ func main() -> i32 {
 
         if (node->ast) {
             for (const auto& dep : node->ast->dependencies) {
-                const Module* dep_module = get_module(dep);
+                const std::string dep_name = dep.to_string();
+                const Module* dep_module = get_module(dep_name);
                 if (!dep_module) {
-                    report_unresolved_dependency(name, dep, node->path);
+                    report_unresolved_dependency(name, dep_name, node->path);
                     found_error = true;
                     break;
                 }
 
-                const auto dep_state = state.find(dep);
+                const auto dep_state = state.find(dep_name);
                 if (dep_state != state.end() && dep_state->second == 1) {
                     std::vector<std::string> cycle;
-                    const auto start = path_index[dep];
+                    const auto start = path_index[dep_name];
                     cycle.reserve(path.size() - start + 1);
                     for (size_t i = start; i < path.size(); ++i) {
                         cycle.push_back(path[i]);
                     }
-                    cycle.push_back(dep);
+                    cycle.push_back(dep_name);
 
                     std::string cycle_text;
                     for (size_t i = 0; i < cycle.size(); ++i) {
@@ -245,7 +252,7 @@ func main() -> i32 {
                 }
 
                 if (dep_state == state.end() || dep_state->second == 0) {
-                    if (dfs_validate_module(dep, state, path, path_index)) {
+                    if (dfs_validate_module(dep_name, state, path, path_index)) {
                         found_error = true;
                         break;
                     }
@@ -460,9 +467,9 @@ func main() -> i32 {
         if (options_.dump_ast) {
             const ast::ModuleAST ast = parser::Parser::parse(tokens, path_key);
             std::cout << "=== AST: " << path_key << " ===\n";
-            std::cout << "module " << ast.module_name << '\n';
+            std::cout << "module " << ast.module_name.to_string() << '\n';
             for (const auto& dep : ast.dependencies) {
-                std::cout << "  import \"" << dep << "\"\n";
+                std::cout << "  import \"" << dep.to_string() << "\"\n";
             }
             std::cout << "  declarations: " << ast.root.declarations.size() << '\n';
             std::cout << '\n';

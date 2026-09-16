@@ -125,8 +125,8 @@ namespace xenon::parser {
 
         // -- Headers --------------------------------------------------------------
 
-        std::string parse_module_name(); // parse the module name
-        std::vector<std::string> parse_dependencies(); // parse the dependencies of the module
+        ModuleName parse_module_name(); // parse the module name
+        std::vector<ModuleName> parse_dependencies(); // parse the dependencies of the module
         
         void parse_header(ModuleAST& ast); // parse the header of the module, including module name and dependencies
     };

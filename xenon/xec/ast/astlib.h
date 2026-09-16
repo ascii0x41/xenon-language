@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <ostream>
 
 #include "common/dataclasses.h"
 
@@ -193,6 +194,65 @@ namespace xenon::ast {
             return is_global ? "::" + value : value;
         }
     };
+
+    struct ModuleName {
+        std::vector<std::string> components;
+
+        ModuleName() = default;
+        explicit ModuleName(std::vector<std::string> names) : components(std::move(names)) {}
+
+        bool empty() const { return components.empty(); }
+
+        std::string to_string() const {
+            std::string value;
+            for (size_t i = 0; i < components.size(); ++i) {
+                if (i != 0) {
+                    value += "::";
+                }
+                value += components[i];
+            }
+            return value;
+        }
+
+        static ModuleName from_name(const Name* name) {
+            ModuleName result;
+            for (const Name* current = name; current != nullptr; current = current->next.get()) {
+                result.components.push_back(current->identifier);
+            }
+            return result;
+        }
+
+        static ModuleName from_string(const std::string& name) {
+            ModuleName result;
+            if (name.empty()) {
+                return result;
+            }
+
+            std::string current;
+            for (char ch : name) {
+                if (ch == ':' && current.empty()) {
+                    continue;
+                }
+                if (ch == ':' && !current.empty()) {
+                    result.components.push_back(current);
+                    current.clear();
+                    continue;
+                }
+                if (ch == ':') {
+                    continue;
+                }
+                current.push_back(ch);
+            }
+            if (!current.empty()) {
+                result.components.push_back(current);
+            }
+            return result;
+        }
+    };
+
+    inline std::ostream& operator<<(std::ostream& os, const ModuleName& module_name) {
+        return os << module_name.to_string();
+    }
 
 
     struct TypeExpression;
@@ -546,8 +606,8 @@ namespace xenon::ast {
 
 
     struct ModuleAST {
-        std::string module_name;
-        std::vector<std::string> dependencies;  // names of modules this module depends on
+        ModuleName module_name;
+        std::vector<ModuleName> dependencies;  // names of modules this module depends on
         ASTRootElement root;
     };
 

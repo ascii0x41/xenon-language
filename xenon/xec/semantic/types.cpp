@@ -117,6 +117,16 @@ TypeLayout calculate_type_layout(Type* type) {
     return layout;
 }
 
+std::vector<Type*> TypeRegistry::all_types() const {
+    std::vector<Type*> result;
+    result.reserve(types.size());
+    for (const auto& [name, type] : types) {
+        (void)name;
+        result.push_back(type.get());
+    }
+    return result;
+}
+
 Type* TypeRegistry::register_type(std::unique_ptr<Type> type) {
     auto kind = type->kind;
     auto name = type->name;

@@ -54,6 +54,40 @@ namespace xenon::semantic {
     }
 
     namespace {
+        Symbol* resolve_name_reference(Scope* current_scope, Scope* global_scope,
+            const std::vector<std::string>& parts, bool is_global) {
+            if (parts.empty()) {
+                return nullptr;
+            }
+
+            if (parts.size() == 1) {
+                if (current_scope != nullptr) {
+                    if (Symbol* symbol = current_scope->lookup(parts[0])) {
+                        return symbol;
+                    }
+                }
+                if (global_scope != nullptr) {
+                    return global_scope->lookup(parts[0]);
+                }
+                return nullptr;
+            }
+
+            if (is_global && global_scope != nullptr) {
+                return global_scope->get_qualified(parts);
+            }
+
+            if (current_scope != nullptr) {
+                if (Symbol* symbol = current_scope->get_qualified(parts)) {
+                    return symbol;
+                }
+            }
+
+            if (global_scope != nullptr) {
+                return global_scope->get_qualified(parts);
+            }
+            return nullptr;
+        }
+
         // Maps a binary AST operator onto the overloadable OperatorKind used
         // to search a type's `operators` table. Only the kinds that are
         // actually overloadable reach here (LOGICAL_AND/LOGICAL_OR are
@@ -188,9 +222,7 @@ namespace xenon::semantic {
                 for (const ast::Name* part = named->name.get(); part != nullptr; part = part->next.get())
                     parts.push_back(part->identifier);
 
-                Symbol* symbol = parts.size() == 1
-                    ? global_scope_.lookup(parts[0])
-                    : global_scope_.get_qualified(parts);
+                Symbol* symbol = resolve_name_reference(current_scope_, &global_scope_, parts, named->name->is_global);
 
                 if (symbol == nullptr) {
                     error(std::format("Unknown type '{}'", named->name->to_string()), type_expr->location);
@@ -379,6 +411,116 @@ namespace xenon::semantic {
 
         error(std::format("Type '{}' has no member '{}'", type->name, member_name), loc);
         return type_registry_.get_error_type();
+    }
+
+    bool SemanticAnalyser::is_assignable_expression(const ast::Expression* expr, Type*& out_type, bool& is_mutable) {
+        if (!expr) {
+            out_type = type_registry_.get_error_type();
+            is_mutable = false;
+            return false;
+        }
+
+        switch (expr->kind) {
+            case ast::ASTNode::NodeKind::NAME: {
+                const auto* name_expr = static_cast<const ast::Name*>(expr);
+                std::vector<std::string> parts;
+                for (const ast::Name* part = name_expr; part != nullptr; part = part->next.get())
+                    parts.push_back(part->identifier);
+
+                Symbol* symbol = resolve_name_reference(current_scope_, &global_scope_, parts, name_expr->is_global);
+                if (symbol == nullptr) {
+                    error(std::format("Unknown symbol '{}'", name_expr->to_string()), expr->location);
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                if (symbol->kind == SymbolKind::VARIABLE) {
+                    auto* variable = static_cast<Variable*>(symbol);
+                    out_type = variable->type;
+                    is_mutable = variable->is_mutable;
+                    return true;
+                }
+                error(std::format("'{}' is not assignable", name_expr->to_string()), expr->location);
+                out_type = type_registry_.get_error_type();
+                is_mutable = false;
+                return false;
+            }
+            case ast::ASTNode::NodeKind::MEMBER_ACCESS_EXPR: {
+                const auto* member_access = static_cast<const ast::MemberAccessExpr*>(expr);
+                Type* object_type = evaluate_expression(member_access->object.get());
+                if (!object_type || object_type->kind == TypeKind::ERROR) {
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                for (const auto& field : object_type->fields) {
+                    if (field.name == member_access->member->identifier) {
+                        out_type = field.type;
+                        is_mutable = true;
+                        return true;
+                    }
+                }
+                error(std::format("Type '{}' has no assignable member '{}'", object_type->name, member_access->member->identifier), expr->location);
+                out_type = type_registry_.get_error_type();
+                is_mutable = false;
+                return false;
+            }
+            case ast::ASTNode::NodeKind::INDEX_EXPR: {
+                const auto* index_expr = static_cast<const ast::IndexExpr*>(expr);
+                Type* object_type = evaluate_expression(index_expr->object.get());
+                if (!object_type || object_type->kind == TypeKind::ERROR) {
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                Type* index_type = evaluate_expression(index_expr->index.get());
+                if (!index_type || index_type->kind == TypeKind::ERROR) {
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                Type* result_type = get_operator_result_type(object_type, OperatorKind::IDX, { index_type }, expr->location);
+                if (!result_type) {
+                    error(std::format("Type '{}' cannot be indexed for assignment", object_type->name), expr->location);
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                out_type = result_type;
+                is_mutable = true;
+                return true;
+            }
+            case ast::ASTNode::NodeKind::UNARY_OP_EXPR: {
+                const auto* unary = static_cast<const ast::UnaryOpExpr*>(expr);
+                if (unary->op != ast::UnaryOperatorKind::DEREFERENCE) {
+                    error("Only pointer dereference is assignable in this form", expr->location);
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                Type* operand_type = evaluate_expression(unary->operand.get());
+                if (!operand_type || operand_type->kind == TypeKind::ERROR) {
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                if (operand_type->kind != TypeKind::POINTER) {
+                    error(std::format("Cannot dereference non-pointer type '{}' for assignment", operand_type->name), expr->location);
+                    out_type = type_registry_.get_error_type();
+                    is_mutable = false;
+                    return false;
+                }
+                auto* pointer_type = static_cast<PointerType*>(operand_type);
+                out_type = pointer_type->pointee_type;
+                is_mutable = pointer_type->is_mutable;
+                return true;
+            }
+            default:
+                error("Expression is not assignable", expr->location);
+                out_type = type_registry_.get_error_type();
+                is_mutable = false;
+                return false;
+        }
     }
 
     Type* SemanticAnalyser::resolve_call(const Function& overload, const std::vector<Type*>& argument_types,
@@ -881,9 +1023,7 @@ namespace xenon::semantic {
                         }
                     }
 
-                    Symbol* symbol = parts.size() == 1
-                        ? current_scope_->lookup(parts[0])
-                        : global_scope_.get_qualified(parts);
+                    Symbol* symbol = resolve_name_reference(current_scope_, &global_scope_, parts, name_expr->is_global);
 
                     if (symbol == nullptr) {
                         error(std::format("Unknown symbol '{}'", name_expr->to_string()), name_expr->location);
@@ -1014,6 +1154,55 @@ namespace xenon::semantic {
 
                 return result_type;
             }
+            case ast::ASTNode::NodeKind::ASSIGNMENT_EXPR: {
+                const auto* assign = static_cast<const ast::AssignmentExpr*>(ast);
+                Type* lhs_type = nullptr;
+                bool lhs_mutable = false;
+                if (!is_assignable_expression(assign->lhs.get(), lhs_type, lhs_mutable)) {
+                    return type_registry_.get_error_type();
+                }
+
+                if (!lhs_mutable) {
+                    error(std::format("Cannot assign to immutable value of type '{}'", lhs_type->name), assign->location);
+                    return type_registry_.get_error_type();
+                }
+
+                Type* rhs_type = evaluate_expression(assign->rhs.get());
+                if (!rhs_type || rhs_type->kind == TypeKind::ERROR) {
+                    return type_registry_.get_error_type();
+                }
+
+                if (!type_registry_.can_implicitly_convert(rhs_type, lhs_type)) {
+                    error(std::format("Cannot assign value of type '{}' to an lvalue of type '{}'",
+                        rhs_type->name, lhs_type->name), assign->location);
+                    return type_registry_.get_error_type();
+                }
+
+                if (assign->op == ast::AssignmentOperatorKind::ASSIGN) {
+                    return lhs_type;
+                }
+
+                Type* compound_result = nullptr;
+                switch (assign->op) {
+                    case ast::AssignmentOperatorKind::ADD_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::ADD, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::SUBTRACT_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::SUB, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::MULTIPLY_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::MUL, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::DIVIDE_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::DIV, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::MODULO_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::MOD, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::BITWISE_AND_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::BADD, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::BITWISE_OR_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::BOR, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::BITWISE_XOR_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::BXOR, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::SHIFT_LEFT_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::BSHFTL, { rhs_type }, assign->location); break;
+                    case ast::AssignmentOperatorKind::SHIFT_RIGHT_ASSIGN: compound_result = get_operator_result_type(lhs_type, OperatorKind::BSHFTR, { rhs_type }, assign->location); break;
+                    default: break;
+                }
+
+                if (!compound_result || compound_result->kind == TypeKind::ERROR) {
+                    error(std::format("Operator '{}' not valid for assignment to type '{}'", static_cast<int>(assign->op), lhs_type->name), assign->location);
+                    return type_registry_.get_error_type();
+                }
+                return lhs_type;
+            }
             case ast::ASTNode::NodeKind::BINARY_OP_EXPR: {
                 const auto* binary_op_expr = static_cast<const ast::BinaryOpExpr*>(ast);
 
@@ -1124,9 +1313,7 @@ namespace xenon::semantic {
                 for (const ast::Name* part = name_expr; part != nullptr; part = part->next.get())
                     parts.push_back(part->identifier);
 
-                Symbol* symbol = parts.size() == 1
-                    ? current_scope_->lookup(parts[0])
-                    : global_scope_.get_qualified(parts);
+                Symbol* symbol = resolve_name_reference(current_scope_, &global_scope_, parts, name_expr->is_global);
 
                 if (symbol == nullptr) {
                     error(std::format("Unknown symbol '{}'", name_expr->to_string()), name_expr->location);
@@ -1208,16 +1395,20 @@ namespace xenon::semantic {
             return false;
         }
 
-        auto variable = std::make_unique<Variable>(var_decl->name, var_decl, var_decl->is_public, final_type, var_decl->is_mut);
-        Variable* variable_ptr = variable.get();
-        symbols_.push_back(std::move(variable));
+        // Registration pass owns variable binding insertion; validation only
+        // checks the declared type/initialiser rules once the symbol is known.
+        if (current_scope_->lookup_local(var_decl->name) == nullptr) {
+            auto variable = std::make_unique<Variable>(var_decl->name, var_decl, var_decl->is_public, final_type, var_decl->is_mut);
+            Variable* variable_ptr = variable.get();
+            symbols_.push_back(std::move(variable));
 
-        if (!current_scope_->add_symbol(variable_ptr)) {
-            error(
-                std::format("'{}' is already declared in this scope", var_decl->name),
-                var_decl->location
-            );
-            return false;
+            if (!current_scope_->add_symbol(variable_ptr)) {
+                error(
+                    std::format("'{}' is already declared in this scope", var_decl->name),
+                    var_decl->location
+                );
+                return false;
+            }
         }
 
         return true;
@@ -1439,16 +1630,21 @@ namespace xenon::semantic {
             return false;
         }
 
-        auto fn = std::make_unique<Function>(function_decl.name, &function_decl, function_decl.is_public, std::move(semantic_parameters), return_type);
-        Function* fn_ptr = fn.get();
-        symbols_.push_back(std::move(fn));
+        // The registration pass owns adding this function to the module's
+        // symbol table. Validation is only responsible for checking the
+        // body/signature semantics after the declaration is already visible.
+        if (current_scope_->lookup_local(function_decl.name) == nullptr) {
+            auto fn = std::make_unique<Function>(function_decl.name, &function_decl, function_decl.is_public, std::move(semantic_parameters), return_type);
+            Function* fn_ptr = fn.get();
+            symbols_.push_back(std::move(fn));
 
-        if (!current_scope_->add_symbol(fn_ptr)) {
-            error(
-                std::format("'{}' is already declared with this parameter signature", function_decl.name),
-                function_decl.location
-            );
-            return false;
+            if (!current_scope_->add_symbol(fn_ptr)) {
+                error(
+                    std::format("'{}' is already declared with this parameter signature", function_decl.name),
+                    function_decl.location
+                );
+                return false;
+            }
         }
 
         return true;
@@ -1495,7 +1691,7 @@ namespace xenon::semantic {
         // hasn't been validated yet still won't resolve; see the
         // accompanying notes.
         Type* class_type = nullptr;
-        if (Symbol* existing = global_scope_.lookup_local(class_decl.name)) {
+        if (Symbol* existing = current_scope_->lookup_local(class_decl.name)) {
             if (existing->kind != SymbolKind::TYPE) {
                 error(std::format("'{}' is already declared and is not a type", class_decl.name), class_decl.location);
                 return false;
@@ -1504,7 +1700,7 @@ namespace xenon::semantic {
         } else {
             auto new_type = std::make_unique<Type>(TypeKind::USER_DEFINED, class_decl.name);
             class_type = type_registry_.register_type(std::move(new_type));
-            global_scope_.add_symbol(class_type);
+            current_scope_->add_symbol(class_type);
         }
 
         bool ok = true;
@@ -1570,10 +1766,46 @@ namespace xenon::semantic {
             return false;
         }
 
-        // Triggers Type::size/align caching; also the reason the cycle
-        // check above has to happen first - an undetected value cycle
-        // would make this recurse forever.
-        calculate_type_layout(class_type);
+        return true;
+    }
+
+    bool SemanticAnalyser::validate_recursive_value_layout_cycles() {
+        bool ok = true;
+        for (Type* type : type_registry_.all_types()) {
+            if (type->kind != TypeKind::USER_DEFINED) {
+                continue;
+            }
+
+            for (const auto& field : type->fields) {
+                if (field.type == nullptr) {
+                    continue;
+                }
+                if (field.type->kind == TypeKind::POINTER || field.type->kind == TypeKind::REFERENCE) {
+                    continue;
+                }
+
+                std::unordered_set<const Type*> visited;
+                if (type_depends_on_by_value(field.type, type, visited)) {
+                    error(
+                        std::format("Recursive by-value layout cycle detected: '{}' contains '{}' by value, which eventually contains '{}' by value again",
+                            type->name, field.type->name, type->name),
+                        SourceLocation{0, 0, "xec"}
+                    );
+                    ok = false;
+                }
+            }
+        }
+
+        if (!ok) {
+            return false;
+        }
+
+        for (Type* type : type_registry_.all_types()) {
+            if (type->kind == TypeKind::USER_DEFINED) {
+                calculate_type_layout(type);
+            }
+        }
+
         return true;
     }
 
@@ -1874,12 +2106,93 @@ namespace xenon::semantic {
         return true;
     }
 
+    Scope* SemanticAnalyser::module_scope_for_name(const std::string& name, const driver::Module& module) {
+        const auto& module_name = module.ast && !module.ast->module_name.empty()
+            ? module.ast->module_name.components
+            : std::vector<std::string>{};
+
+        if (!module_name.empty()) {
+            return global_scope_.get_or_create_path(module_name);
+        }
+
+        std::vector<std::string> parts;
+        std::string current;
+        for (char ch : name) {
+            if (ch == ':' && !current.empty()) {
+                parts.push_back(current);
+                current.clear();
+                continue;
+            }
+            if (ch == ':') {
+                continue;
+            }
+            current.push_back(ch);
+        }
+        if (!current.empty()) {
+            parts.push_back(current);
+        }
+
+        return global_scope_.get_or_create_path(parts);
+    }
+
+    bool SemanticAnalyser::discover_module(const std::string& name, const driver::Module& module) {
+        if (!module.ast.has_value()) {
+            return true;
+        }
+
+        Scope* previous_scope = current_scope_;
+        Scope* module_scope = module_scope_for_name(name, module);
+        current_scope_ = module_scope;
+
+        bool ok = true;
+        for (const auto& decl : module.ast->root.declarations) {
+            switch (decl->kind) {
+                case ast::ASTNode::NodeKind::CLASS_STRUCTURE_DECL: {
+                    const auto* class_decl = static_cast<const ast::ClassStructureDecl*>(decl.get());
+                    if (current_scope_->lookup_local(class_decl->name) == nullptr) {
+                        auto new_type = std::make_unique<Type>(TypeKind::USER_DEFINED, class_decl->name);
+                        Type* class_type = type_registry_.register_type(std::move(new_type));
+                        current_scope_->add_symbol(class_type);
+                    }
+                    break;
+                }
+                case ast::ASTNode::NodeKind::FUNCTION_DECL: {
+                    const auto* fn_decl = static_cast<const ast::FunctionDecl*>(decl.get());
+                    auto fn = std::make_unique<Function>(fn_decl->name, fn_decl, fn_decl->is_public,
+                        std::vector<Parameter>{}, type_registry_.get_void_type());
+                    if (!current_scope_->add_symbol(fn.get())) {
+                        Symbol* existing = current_scope_->lookup_local(fn_decl->name);
+                        if (existing && existing->kind == SymbolKind::FUNCTION) {
+                            auto variants = std::make_unique<FunctionVariants>(fn_decl->name);
+                            auto* first = static_cast<Function*>(existing);
+                            variants->overloads.push_back(first);
+                            variants->overloads.push_back(fn.get());
+                            current_scope_->symbols[fn_decl->name] = variants.get();
+                            current_scope_->owned_symbols.push_back(std::move(variants));
+                        } else {
+                            ok = false;
+                        }
+                    } else {
+                        current_scope_->owned_symbols.push_back(std::move(fn));
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        current_scope_ = previous_scope;
+        return ok;
+    }
+
     bool SemanticAnalyser::validate_module(const std::string& name, const driver::Module& module) {
         if (!module.ast.has_value()) {
-            g_diagnostics.error(std::format("Module '{}' has no AST", name),
-                SourceLocation{0, 0, module.path.string()});
-            return false;
+            return true;
         }
+
+        Scope* previous_scope = current_scope_;
+        current_scope_ = module_scope_for_name(name, module);
 
         bool ok = true;
         for (const auto& decl : module.ast->root.declarations) {
@@ -1899,19 +2212,46 @@ namespace xenon::semantic {
                         ok = false;
                     }
                     break;
+                case ast::ASTNode::NodeKind::VARIABLE_DECL:
+                    if (!validate_variable_decl(static_cast<const ast::VariableDecl*>(decl.get())))  {
+                        ok = false;
+                    }
+                    break;
                 default:
                     break;
             }
         }
 
+        current_scope_ = previous_scope;
         return ok;
     }
 
     bool SemanticAnalyser::validate_modules() {
-        for (const auto& [name, module] : namespace_tree_.modules()) {
-            if (!validate_module(name, module))
+        const auto module_names = namespace_tree_.all_module_names();
+        for (const auto& name : module_names) {
+            const auto* module = namespace_tree_.get_module(name);
+            if (module == nullptr || !module->ast.has_value()) {
+                continue;
+            }
+            if (!discover_module(name, *module)) {
                 return false;
+            }
         }
+
+        for (const auto& name : module_names) {
+            const auto* module = namespace_tree_.get_module(name);
+            if (module == nullptr || !module->ast.has_value()) {
+                continue;
+            }
+            if (!validate_module(name, *module)) {
+                return false;
+            }
+        }
+
+        if (!validate_recursive_value_layout_cycles()) {
+            return false;
+        }
+
         return !g_diagnostics.has_errors();
     }
 

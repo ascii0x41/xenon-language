@@ -53,6 +53,8 @@ namespace xenon::semantic {
         SemanticAnalyser(const driver::ModuleNamespaceTree& namespace_tree, const config::CompilerConfig& options);
         void warn(const std::string& message, const SourceLocation& loc) const;
         void error(const std::string& message, const SourceLocation& loc) const;
+        Scope* module_scope_for_name(const std::string& name, const driver::Module& module);
+        bool discover_module(const std::string& name, const driver::Module& module);
         bool validate_module(const std::string& name, const driver::Module& module);
 
         // Scope management. Kept deliberately minimal: current_scope_ is a
@@ -82,6 +84,7 @@ namespace xenon::semantic {
         // ordering limitation without that driver.
         bool validate_class_structure(const ast::ClassStructureDecl& class_decl);
         bool validate_class_implementation(const ast::ClassImplementationDecl& impl_decl);
+        bool validate_recursive_value_layout_cycles();
         bool validate_class_static_var(Type* class_type, const ast::VariableDecl* static_var_decl);
         bool validate_class_method(Type* class_type, const ast::ClassMethodDecl* method_decl);
         bool validate_operator_overload(Type* class_type, const ast::OperatorOverloadDecl* op_decl);
@@ -118,6 +121,8 @@ namespace xenon::semantic {
 
         Type* resolve_type_expression(const ast::TypeExprPtr& type_expr);
         Type* evaluate_expression(const ast::ASTNode* ast, Type* expected_type = nullptr);
+
+        bool is_assignable_expression(const ast::Expression* expr, Type*& out_type, bool& is_mutable);
 
     public:
         static bool validate(const driver::ModuleNamespaceTree& namespace_tree,

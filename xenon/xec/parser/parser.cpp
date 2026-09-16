@@ -802,19 +802,20 @@ namespace xenon::parser {
     }
 
 
-    std::string Parser::parse_module_name() {
+    ModuleName Parser::parse_module_name() {
         expect(TokenType::MODULE, "Expected 'module' keyword");
-        auto module_name = (*parse_name()).to_string();
+        auto name = parse_name();
+        ModuleName module_name = ModuleName::from_name(name.get());
         expect(TokenType::SEMICOLON, "Expected ';' after module name declaration");
         return module_name;
     }
 
-    std::vector<std::string> Parser::parse_dependencies() {
-        std::vector<std::string> dependencies;
+    std::vector<ModuleName> Parser::parse_dependencies() {
+        std::vector<ModuleName> dependencies;
         while (match(TokenType::IMPORT)) {
-            auto dep_name = parse_name()->to_string();
+            auto dep_name = parse_name();
+            dependencies.push_back(ModuleName::from_name(dep_name.get()));
             expect(TokenType::SEMICOLON, "Expected ';' after import declaration");
-            dependencies.push_back(dep_name);
         }
         return dependencies;
     }

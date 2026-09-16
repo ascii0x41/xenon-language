@@ -417,6 +417,8 @@ namespace xenon::semantic {
         Type* register_reference(Type* type, bool is_mut = false);
         Type* register_array_type(Type* elem_type, std::optional<unsigned> arr_length = std::nullopt);
 
+        std::vector<Type*> all_types() const;
+
         TypeRegistry() = default;
         ~TypeRegistry() = default;
 
