@@ -1430,6 +1430,9 @@ namespace xenon::semantic {
             case ast::ASTNode::NodeKind::WHILE_STMT:
                 return validate_while_statement(static_cast<const ast::WhileStmt*>(stmt));
 
+            case ast::ASTNode::NodeKind::FOR_STMT:
+                return validate_for_statement(static_cast<const ast::ForStmt*>(stmt));
+
             case ast::ASTNode::NodeKind::TYPE_ALIAS_DECL: {
                 const auto* alias = static_cast<const ast::TypeAliasDecl*>(stmt);
                 Type* target = resolve_type_expression(alias->target_type);
@@ -1580,13 +1583,45 @@ namespace xenon::semantic {
         --loop_depth_;
 
         // The body might run zero times, so a `while` never counts as a
-        // guaranteed return yet, regardless of what its body does. No
-        // constant-condition or infinite-loop analysis for now.
-        return ControlFlowResult::FALLS_THROUGH;
-    }
+         // guaranteed return yet, regardless of what its body does. No
+         // constant-condition or infinite-loop analysis for now.
+         return ControlFlowResult::FALLS_THROUGH;
+     }
 
+     ControlFlowResult SemanticAnalyser::validate_for_statement(const ast::ForStmt* for_stmt) {
+         if (for_stmt->variable_type) {
+             Type* var_type = resolve_type_expression(for_stmt->variable_type);
+             if (var_type->kind == TypeKind::ERROR) {
+                 return ControlFlowResult::FALLS_THROUGH;
+             }
+         }
 
-    ControlFlowResult SemanticAnalyser::validate_callable_body(const std::string& scope_name,
+         Type* iterable_type = evaluate_expression(for_stmt->iterable.get());
+         if (!iterable_type || iterable_type->kind == TypeKind::ERROR) {
+             return ControlFlowResult::FALLS_THROUGH;
+         }
+
+         Type* loop_type = iterable_type;
+         if (iterable_type->kind == TypeKind::ARRAY) {
+             loop_type = static_cast<ArrayType*>(iterable_type)->element_type;
+         }
+
+         if (current_scope_->lookup_local(for_stmt->variable_name) == nullptr) {
+             auto variable = std::make_unique<Variable>(for_stmt->variable_name, for_stmt, false,
+                 loop_type, false);
+             Variable* variable_ptr = variable.get();
+             symbols_.push_back(std::move(variable));
+             current_scope_->add_symbol(variable_ptr);
+         }
+
+         ++loop_depth_;
+         validate_statement(for_stmt->body.get());
+         --loop_depth_;
+
+         return ControlFlowResult::FALLS_THROUGH;
+     }
+
+     ControlFlowResult SemanticAnalyser::validate_callable_body(const std::string& scope_name,
             const std::vector<ast::VariableDeclPtr>& parameters, Type* return_type,
             const ast::BlockStmt* body, bool& parameters_ok) {
         Scope* previous_scope = enter_scope(scope_name);

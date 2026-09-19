@@ -104,6 +104,7 @@ namespace xenon::semantic {
         ControlFlowResult validate_block(const ast::BlockStmt* block);
         ControlFlowResult validate_if_statement(const ast::IfStmt* if_stmt);
         ControlFlowResult validate_while_statement(const ast::WhileStmt* while_stmt);
+        ControlFlowResult validate_for_statement(const ast::ForStmt* for_stmt);
 
         // Evaluation
         Type* get_operator_result_type(const Type* type, OperatorKind op_kind, const std::vector<const Type*>& arg_types, const SourceLocation& loc);
