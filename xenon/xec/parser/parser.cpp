@@ -661,7 +661,15 @@ namespace xenon::parser {
         return expr;
     }
 
-    // for <var> in <iterable> { ... }
+    // for x in collection { body }
+    // Desugars to:
+    // {
+    //     let _iter = IntoIterator::into_iter(collection);
+    //     while _iter.next() != nullptr {
+    //         let x = _iter.value;
+    //         body
+    //     }
+    // }
     StatementPtr Parser::parse_for_statement() {
         SourceLocation l = loc();
         expect(TokenType::FOR, "Expected 'for' keyword");
@@ -677,7 +685,50 @@ namespace xenon::parser {
         auto iterable = parse_for_iterable();
         auto body = parse_block();
 
-        return std::make_unique<ForStmt>(l, std::move(var_name), std::move(variable_type), std::move(iterable), std::move(body));
+        // Build desugared AST:
+        // let _iter = IntoIterator::into_iter(iterable)
+        auto iter_name = std::make_unique<Name>(l, "_iter");
+        auto into_iter_name = std::make_unique<Name>(l, "into_iter",
+            std::make_unique<Name>(l, "IntoIterator", nullptr, true));
+        auto into_iter_call = std::make_unique<CallExpr>(l, std::move(into_iter_name),
+            std::vector<ExpressionPtr>{std::move(iterable)});
+        auto iter_decl = std::make_unique<VariableDecl>(l, "_iter", nullptr,
+            std::move(into_iter_call), false, false);
+
+        // while _iter.next() != nullptr
+        auto iter_ref = std::make_unique<Name>(l, "_iter");
+        auto next_call = std::make_unique<CallExpr>(l, std::make_unique<MemberAccessExpr>(l,
+            std::move(iter_ref), std::make_unique<Name>(l, "next")),
+            std::vector<ExpressionPtr>{});
+        auto null_literal = std::make_unique<LiteralNullptr>(l);
+        auto condition = std::make_unique<BinaryOpExpr>(l, BinaryOperatorKind::NOT_EQUAL,
+            std::move(next_call), std::move(null_literal));
+
+        // let x = _iter.value  (inside while body)
+        auto iter_ref2 = std::make_unique<Name>(l, "_iter");
+        auto value_access = std::make_unique<MemberAccessExpr>(l, std::move(iter_ref2),
+            std::make_unique<Name>(l, "value"));
+        auto var_decl = std::make_unique<VariableDecl>(l, var_name, std::move(variable_type),
+            std::move(value_access), false, false);
+
+        // while body = [let x = _iter.value; original_body_statements]
+        std::vector<StatementPtr> while_body;
+        while_body.push_back(std::move(var_decl));
+        auto* body_block = static_cast<BlockStmt*>(body.get());
+        while_body.insert(while_body.end(),
+            std::make_move_iterator(body_block->statements.begin()),
+            std::make_move_iterator(body_block->statements.end()));
+        auto while_body_block = std::make_unique<BlockStmt>(l, std::move(while_body));
+
+        auto while_stmt = std::make_unique<WhileStmt>(l, std::move(condition), std::move(while_body_block));
+
+        // outer block: [let _iter = ...; while ...]
+        std::vector<StatementPtr> outer_block_stmts;
+        outer_block_stmts.push_back(std::move(iter_decl));
+        outer_block_stmts.push_back(std::move(while_stmt));
+        auto outer_block = std::make_unique<BlockStmt>(l, std::move(outer_block_stmts));
+
+        return outer_block;
     }
 
     /* == WIP ==

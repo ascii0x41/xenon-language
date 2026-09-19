@@ -14,7 +14,7 @@
 - [x] Functions (`func`, `-> T` return types)
 - [x] Variables (`let`), constants (`let` in impl)
 - [x] `if` / `while`
-- [x] Structs via `class` (soon `type`)
+- [x] Structs via `type`
 - [x] Methods, static methods
 - [x] Fields, static fields
 - [x] Operators, ternary, in-place assignment
@@ -79,8 +79,9 @@
   ```xenon
   for x in collection { ... }
   ```
-- [x] Desugars to `IntoIterator::into_iter` + `Iterator::next`
-- [x] `break` / `continue` (with optional labels?)
+- [ ] Desugars to `IntoIterator::into_iter` + `Iterator::next`
+- [x] `break` / `continue`
+- [ ] `break` / `continue` with optional labels
 
 ### Memory
 - [ ] `Box<T>` — unique ownership, just `*mut T`
