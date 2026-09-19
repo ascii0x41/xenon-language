@@ -54,6 +54,7 @@ namespace xenon::ast {
             IF_STMT,
             WHILE_STMT,
             FOREACH_STMT,
+            FOR_STMT,
 
             // Jump
             RETURN_STMT,
@@ -458,6 +459,16 @@ namespace xenon::ast {
         StatementPtr  body;
         WhileStmt(SourceLocation l, ExpressionPtr cond, StatementPtr b)
             : Statement(NodeKind::WHILE_STMT, std::move(l)), condition(std::move(cond)), body(std::move(b)) {}
+    };
+
+    struct ForStmt : public Statement {
+        std::string variable_name;
+        TypeExprPtr variable_type;
+        ExpressionPtr iterable;
+        StatementPtr  body;
+        ForStmt(SourceLocation l, std::string var_name, TypeExprPtr var_type, ExpressionPtr iter, StatementPtr b)
+            : Statement(NodeKind::FOR_STMT, std::move(l)), variable_name(std::move(var_name)),
+              variable_type(std::move(var_type)), iterable(std::move(iter)), body(std::move(b)) {}
     };
 
     // -- Jump Statements ---------------------------------------------------------------

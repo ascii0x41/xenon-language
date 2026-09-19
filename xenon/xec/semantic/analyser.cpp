@@ -1425,6 +1425,9 @@ namespace xenon::semantic {
             case ast::ASTNode::NodeKind::WHILE_STMT:
                 return validate_while_statement(static_cast<const ast::WhileStmt*>(stmt));
 
+            case ast::ASTNode::NodeKind::FOR_STMT:
+                return validate_for_statement(static_cast<const ast::ForStmt*>(stmt));
+
             case ast::ASTNode::NodeKind::RETURN_STMT: {
                 const auto* return_stmt = static_cast<const ast::ReturnStmt*>(stmt);
 
@@ -1490,7 +1493,7 @@ namespace xenon::semantic {
             }
 
             default:
-                // Other statement kinds (e.g. DELETE_STMT, FOREACH_STMT)
+                // Other statement kinds (e.g. DELETE_STMT)
                 // have no control-flow significance implemented yet - they
                 // simply fall through for now.
                 return ControlFlowResult::FALLS_THROUGH;
@@ -1563,6 +1566,34 @@ namespace xenon::semantic {
         // The body might run zero times, so a `while` never counts as a
         // guaranteed return yet, regardless of what its body does. No
         // constant-condition or infinite-loop analysis for now.
+        return ControlFlowResult::FALLS_THROUGH;
+    }
+
+    ControlFlowResult SemanticAnalyser::validate_for_statement(const ast::ForStmt* for_stmt) {
+        if (for_stmt->variable_type) {
+            Type* var_type = resolve_type_expression(for_stmt->variable_type);
+            if (var_type->kind == TypeKind::ERROR) {
+                return ControlFlowResult::FALLS_THROUGH;
+            }
+        }
+
+        Type* iterable_type = evaluate_expression(for_stmt->iterable.get());
+        if (!iterable_type || iterable_type->kind == TypeKind::ERROR) {
+            return ControlFlowResult::FALLS_THROUGH;
+        }
+
+        if (current_scope_->lookup_local(for_stmt->variable_name) == nullptr) {
+            auto variable = std::make_unique<Variable>(for_stmt->variable_name, for_stmt, false,
+                iterable_type, false);
+            Variable* variable_ptr = variable.get();
+            symbols_.push_back(std::move(variable));
+            current_scope_->add_symbol(variable_ptr);
+        }
+
+        ++loop_depth_;
+        validate_statement(for_stmt->body.get());
+        --loop_depth_;
+
         return ControlFlowResult::FALLS_THROUGH;
     }
 

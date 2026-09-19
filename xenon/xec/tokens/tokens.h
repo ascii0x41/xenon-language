@@ -32,6 +32,7 @@ namespace xenon::tokens {
         IF,         // if
         ELSE,       // else
         WHILE,      // while
+        FOR,        // for
         FOREACH,    // foreach
         IN,         // in
 
@@ -142,6 +143,7 @@ namespace xenon::tokens {
         {"if",        TokenType::IF},
         {"else",      TokenType::ELSE},
         {"while",     TokenType::WHILE},
+        {"for",       TokenType::FOR},
         {"foreach",   TokenType::FOREACH},
         {"in",        TokenType::IN},
         // Jump
@@ -189,6 +191,7 @@ namespace xenon::tokens {
             case TokenType::IF:             return "if";
             case TokenType::ELSE:           return "else";
             case TokenType::WHILE:          return "while";
+            case TokenType::FOR:            return "for";
             case TokenType::FOREACH:        return "foreach";
             case TokenType::IN:             return "in";
             case TokenType::RETURN:         return "return";

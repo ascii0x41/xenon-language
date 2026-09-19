@@ -111,6 +111,7 @@ namespace xenon::parser {
 
         StatementPtr parse_if_statement();
         StatementPtr parse_while_statement();
+        StatementPtr parse_for_statement();
         // StatementPtr parse_foreach_statement();
 
         VariableDeclPtr parse_variable_declaration(bool is_public = false);

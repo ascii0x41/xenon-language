@@ -559,6 +559,10 @@ namespace xenon::parser {
             return parse_while_statement();
         }
 
+        if (check(TokenType::FOR)) {
+            return parse_for_statement();
+        }
+
         if (match(TokenType::RETURN)) {
             SourceLocation l = loc();
             ExpressionPtr ret_expr = nullptr;
@@ -622,6 +626,25 @@ namespace xenon::parser {
         auto condition = parse_expression();
         auto body = parse_block();
         return std::make_unique<WhileStmt>(l, std::move(condition), std::move(body));
+    }
+
+    // for <var> in <iterable> { ... }
+    StatementPtr Parser::parse_for_statement() {
+        SourceLocation l = loc();
+        expect(TokenType::FOR, "Expected 'for' keyword");
+
+        auto var_name = expect(TokenType::IDENTIFIER, "Expected loop variable name").lexeme;
+
+        TypeExprPtr variable_type = nullptr;
+        if (accept(TokenType::COLON)) {
+            variable_type = parse_type_expression();
+        }
+
+        expect(TokenType::IN, "Expected 'in' keyword in for loop");
+        auto iterable = parse_expression();
+        auto body = parse_block();
+
+        return std::make_unique<ForStmt>(l, std::move(var_name), std::move(variable_type), std::move(iterable), std::move(body));
     }
 
     /* == WIP ==
