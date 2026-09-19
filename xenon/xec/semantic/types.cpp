@@ -376,4 +376,17 @@ bool TypeRegistry::can_implicitly_convert(const Type* from, const Type* to) cons
     return false;
 }
 
+void TypeRegistry::add_alias(const std::string& alias_name, Type* target_type) {
+    type_aliases[alias_name] = target_type;
+}
+
+Type* TypeRegistry::resolve_alias(const std::string& alias_name) const {
+    auto it = type_aliases.find(alias_name);
+    return it == type_aliases.end() ? nullptr : it->second;
+}
+
+bool TypeRegistry::is_alias(const std::string& name) const {
+    return type_aliases.find(name) != type_aliases.end();
+}
+
 } // namespace xenon::semantic

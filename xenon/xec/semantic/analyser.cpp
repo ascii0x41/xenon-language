@@ -234,7 +234,12 @@ namespace xenon::semantic {
                     return type_registry_.get_error_type();
                 }
 
-                return static_cast<Type*>(symbol);
+                Type* resolved = static_cast<Type*>(symbol);
+                if (type_registry_.is_alias(resolved->name)) {
+                    Type* alias_target = type_registry_.resolve_alias(resolved->name);
+                    if (alias_target) return alias_target;
+                }
+                return resolved;
             }
             case ast::ASTNode::NodeKind::POINTER_TYPE: {
                 const auto* ptr_expr = static_cast<const ast::PointerTypeExpr*>(type_expr.get());
@@ -1432,7 +1437,7 @@ namespace xenon::semantic {
                 const auto* alias = static_cast<const ast::TypeAliasDecl*>(stmt);
                 Type* target = resolve_type_expression(alias->target_type);
                 if (!target || target->kind == TypeKind::ERROR) {
-                    error(std::format("Unknown type '{}' in type alias", alias->target_type->to_string()), alias->location);
+                    error(std::format("Unknown type in type alias"), alias->location);
                 }
                 if (current_scope_->lookup_local(alias->alias_name) == nullptr) {
                     auto sym = std::make_unique<Symbol>(alias->alias_name, alias, alias->is_public, SymbolKind::TYPE);
@@ -1596,9 +1601,14 @@ namespace xenon::semantic {
             return ControlFlowResult::FALLS_THROUGH;
         }
 
+        Type* loop_type = iterable_type;
+        if (iterable_type->kind == TypeKind::ARRAY) {
+            loop_type = static_cast<ArrayType*>(iterable_type)->element_type;
+        }
+
         if (current_scope_->lookup_local(for_stmt->variable_name) == nullptr) {
             auto variable = std::make_unique<Variable>(for_stmt->variable_name, for_stmt, false,
-                iterable_type, false);
+                loop_type, false);
             Variable* variable_ptr = variable.get();
             symbols_.push_back(std::move(variable));
             current_scope_->add_symbol(variable_ptr);
@@ -2154,15 +2164,14 @@ namespace xenon::semantic {
     bool SemanticAnalyser::validate_type_alias(const ast::TypeAliasDecl* alias_decl) {
         Type* target = resolve_type_expression(alias_decl->target_type);
         if (!target || target->kind == TypeKind::ERROR) {
-            error(std::format("Unknown type '{}' in type alias '{}'", alias_decl->target_type->to_string(), alias_decl->alias_name), alias_decl->location);
+            error(std::format("Unknown type in type alias '{}'", alias_decl->alias_name), alias_decl->location);
             return false;
         }
 
         if (current_scope_->lookup_local(alias_decl->alias_name) == nullptr) {
+            type_registry_.add_alias(alias_decl->alias_name, target);
             auto type = std::make_unique<Type>(TypeKind::USER_DEFINED, alias_decl->alias_name);
             Type* type_ptr = type.get();
-            type->size = target->size;
-            type->align = target->align;
             type_registry_.register_type(std::move(type));
             current_scope_->add_symbol(type_ptr);
         }

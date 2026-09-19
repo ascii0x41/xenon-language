@@ -631,6 +631,36 @@ namespace xenon::parser {
         return std::make_unique<WhileStmt>(l, std::move(condition), std::move(body));
     }
 
+    ExpressionPtr Parser::parse_for_iterable() {
+        auto expr = parse_primary();
+
+        while (true) {
+            SourceLocation l = loc();
+
+            if (peek().type == TokenType::DOT) {
+                advance();
+                auto member = parse_name();
+                expr = std::make_unique<MemberAccessExpr>(l, std::move(expr), std::move(member));
+            }
+            else if (peek().type == TokenType::LPAREN) {
+                auto args = parse_arguments();
+                bool is_early_return = accept(TokenType::QUESTION);
+                expr = std::make_unique<CallExpr>(l, std::move(expr), std::move(args), is_early_return);
+            }
+            else if (peek().type == TokenType::LBRACKET) {
+                advance();
+                auto idx = parse_expression();
+                expect(TokenType::RBRACKET, "Expected ']' after index");
+                expr = std::make_unique<IndexExpr>(l, std::move(expr), std::move(idx));
+            }
+            else {
+                break;
+            }
+        }
+
+        return expr;
+    }
+
     // for <var> in <iterable> { ... }
     StatementPtr Parser::parse_for_statement() {
         SourceLocation l = loc();
@@ -644,7 +674,7 @@ namespace xenon::parser {
         }
 
         expect(TokenType::IN, "Expected 'in' keyword in for loop");
-        auto iterable = parse_expression();
+        auto iterable = parse_for_iterable();
         auto body = parse_block();
 
         return std::make_unique<ForStmt>(l, std::move(var_name), std::move(variable_type), std::move(iterable), std::move(body));

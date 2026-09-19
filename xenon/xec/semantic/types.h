@@ -408,6 +408,7 @@ namespace xenon::semantic {
         std::unordered_map<std::string, std::unique_ptr<Type>> types;
         std::unordered_map<TypeKind, std::vector<Type*>> types_by_kind;
         std::unique_ptr<Type> error_type = std::make_unique<ErrorType>();
+        std::unordered_map<std::string, Type*> type_aliases;
 
         Type* register_builtin_type(BuiltinType::BuiltinKind kind);
 
@@ -432,6 +433,10 @@ namespace xenon::semantic {
         Type* get_void_type();
         Type* get_null_type();
         Type* get_error_type();
+
+        void add_alias(const std::string& alias_name, Type* target_type);
+        Type* resolve_alias(const std::string& alias_name) const;
+        bool is_alias(const std::string& name) const;
 
         bool is_signed_integer(const Type* type) const;
         bool is_unsigned_integer(const Type* type) const;

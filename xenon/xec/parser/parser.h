@@ -77,6 +77,7 @@ namespace xenon::parser {
         //   primary       literals  names  lambda  new
 
         ExpressionPtr parse_expression();
+        ExpressionPtr parse_for_iterable();
         ExpressionPtr parse_assignment();
         ExpressionPtr parse_ternary();
         ExpressionPtr parse_logical_or();
