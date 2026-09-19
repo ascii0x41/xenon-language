@@ -538,8 +538,11 @@ namespace xenon::parser {
         if (check(TokenType::FUNC))  {
             return parse_function_declaration(is_public);
         }
-        if (check(TokenType::CLASS)) {
-            return parse_class_structure_declaration(is_public);
+        if (check(TokenType::TYPE)) {
+            if (current_ + 2 < tokens_.size() && tokens_[current_ + 2].type == TokenType::EQ) {
+                return parse_type_alias_declaration(is_public);
+            }
+            return parse_struct_declaration(is_public);
         }
         if (check(TokenType::IMPL)) {
             return parse_class_implementation_declaration();
@@ -753,12 +756,12 @@ namespace xenon::parser {
         return std::make_unique<ClassMethodDecl>(l, std::move(name), std::move(params), std::move(return_type), std::move(body), is_public, is_static);
     }
 
-    ClassStructureDeclPtr Parser::parse_class_structure_declaration(bool is_public) {
+    ClassStructureDeclPtr Parser::parse_struct_declaration(bool is_public) {
         SourceLocation l = loc();
-        expect(TokenType::CLASS, "Expected 'class' keyword");
-        auto name = expect(TokenType::IDENTIFIER, "Expected class name after 'class'").lexeme;
+        expect(TokenType::TYPE, "Expected 'type' keyword");
+        auto name = expect(TokenType::IDENTIFIER, "Expected struct name after 'type'").lexeme;
 
-        expect(TokenType::LBRACE, "Expected '{' to start class body");
+        expect(TokenType::LBRACE, "Expected '{' to start struct body");
 
         std::vector<ClassFieldDeclPtr> fields;
 
@@ -767,14 +770,24 @@ namespace xenon::parser {
             if (match(TokenType::PUB)) field_public = true;
 
             if (!check(TokenType::IDENTIFIER)) {
-                throw CompilerException("Expected class field declaration", peek().location, Severity::ERROR);
+                throw CompilerException("Expected struct field declaration", peek().location, Severity::ERROR);
             }
 
             fields.push_back(parse_class_field_declaration(field_public));
         }
 
-        expect(TokenType::RBRACE, "Expected '}' to close class declaration");
+        expect(TokenType::RBRACE, "Expected '}' to close struct declaration");
         return std::make_unique<ClassStructureDecl>(l, std::move(name), std::move(fields), is_public);
+    }
+
+    TypeAliasDeclPtr Parser::parse_type_alias_declaration(bool is_public) {
+        SourceLocation l = loc();
+        expect(TokenType::TYPE, "Expected 'type' keyword");
+        auto alias_name = expect(TokenType::IDENTIFIER, "Expected alias name after 'type'").lexeme;
+        expect(TokenType::EQ, "Expected '=' in type alias declaration");
+        auto target_type = parse_type_expression();
+        expect(TokenType::SEMICOLON, "Expected ';' after type alias declaration");
+        return std::make_unique<TypeAliasDecl>(l, std::move(alias_name), std::move(target_type), is_public);
     }
 
     ClassImplementationDeclPtr Parser::parse_class_implementation_declaration() {

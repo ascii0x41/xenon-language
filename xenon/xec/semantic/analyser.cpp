@@ -1428,6 +1428,20 @@ namespace xenon::semantic {
             case ast::ASTNode::NodeKind::FOR_STMT:
                 return validate_for_statement(static_cast<const ast::ForStmt*>(stmt));
 
+            case ast::ASTNode::NodeKind::TYPE_ALIAS_DECL: {
+                const auto* alias = static_cast<const ast::TypeAliasDecl*>(stmt);
+                Type* target = resolve_type_expression(alias->target_type);
+                if (!target || target->kind == TypeKind::ERROR) {
+                    error(std::format("Unknown type '{}' in type alias", alias->target_type->to_string()), alias->location);
+                }
+                if (current_scope_->lookup_local(alias->alias_name) == nullptr) {
+                    auto sym = std::make_unique<Symbol>(alias->alias_name, alias, alias->is_public, SymbolKind::TYPE);
+                    symbols_.push_back(std::move(sym));
+                    current_scope_->add_symbol(symbols_.back().get());
+                }
+                return ControlFlowResult::FALLS_THROUGH;
+            }
+
             case ast::ASTNode::NodeKind::RETURN_STMT: {
                 const auto* return_stmt = static_cast<const ast::ReturnStmt*>(stmt);
 
@@ -2137,6 +2151,25 @@ namespace xenon::semantic {
         return true;
     }
 
+    bool SemanticAnalyser::validate_type_alias(const ast::TypeAliasDecl* alias_decl) {
+        Type* target = resolve_type_expression(alias_decl->target_type);
+        if (!target || target->kind == TypeKind::ERROR) {
+            error(std::format("Unknown type '{}' in type alias '{}'", alias_decl->target_type->to_string(), alias_decl->alias_name), alias_decl->location);
+            return false;
+        }
+
+        if (current_scope_->lookup_local(alias_decl->alias_name) == nullptr) {
+            auto type = std::make_unique<Type>(TypeKind::USER_DEFINED, alias_decl->alias_name);
+            Type* type_ptr = type.get();
+            type->size = target->size;
+            type->align = target->align;
+            type_registry_.register_type(std::move(type));
+            current_scope_->add_symbol(type_ptr);
+        }
+
+        return true;
+    }
+
     Scope* SemanticAnalyser::module_scope_for_name(const std::string& name, const driver::Module& module) {
         const auto& module_name = module.ast && !module.ast->module_name.empty()
             ? module.ast->module_name.components
@@ -2238,7 +2271,12 @@ namespace xenon::semantic {
                         ok = false;
                     }
                     break;
-                case ast::ASTNode::NodeKind::CLASS_IMPLEMENTATION_DECL:
+                 case ast::ASTNode::NodeKind::TYPE_ALIAS_DECL:
+                     if (!validate_type_alias(static_cast<const ast::TypeAliasDecl*>(decl.get()))) {
+                         ok = false;
+                     }
+                     break;
+                 case ast::ASTNode::NodeKind::CLASS_IMPLEMENTATION_DECL:
                     if (!validate_class_implementation(*static_cast<const ast::ClassImplementationDecl*>(decl.get()))) {
                         ok = false;
                     }

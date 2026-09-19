@@ -118,11 +118,12 @@ namespace xenon::parser {
         FunctionDeclPtr parse_function_declaration(bool is_public = false);
         OperatorOverloadDeclPtr parse_operator_overload_declaration(bool is_public = false);
 
+        TypeAliasDeclPtr parse_type_alias_declaration(bool is_public = false);
+        ClassStructureDeclPtr parse_struct_declaration(bool is_public = false);
+        ClassImplementationDeclPtr parse_class_implementation_declaration();
+
         ClassFieldDeclPtr parse_class_field_declaration(bool is_public = false);
         ClassMethodDeclPtr parse_class_method_declaration(bool is_public = false, bool is_static = false);
-
-        ClassStructureDeclPtr parse_class_structure_declaration(bool is_public = false);
-        ClassImplementationDeclPtr parse_class_implementation_declaration();
 
         // -- Headers --------------------------------------------------------------
 

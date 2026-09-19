@@ -172,16 +172,16 @@ Functions can have constrained generic parameters:
 func process<T: Printable + Comparable<U>, U>(params) { ... }
 ```
 
-## Classes
+## Types
 
-Class syntax:
+Type syntax:
 ```
-class name<T, U> impl Trait1, Trait2 { ... }
+type name<T, U> impl Trait1, Trait2 { ... }
 ```
 
-### Class Components
-- `class` — class keyword
-- `name` — class name
+### Type Components
+- `type` — type keyword
+- `name` — type name
 - `<T, U>` — optional generic parameters
 - `impl Trait1, Trait2` — optional trait implementations
 
@@ -213,11 +213,11 @@ Methods can have the following modifiers:
 
 Example:
 ```
-class MyClass {
+type MyType {
 
     var value: i32;
 
-    public static func new() -> MyClass { ... }
+    public static func new() -> MyType { ... }
     
     public func getValue() -> i32 { ... }
     
@@ -241,7 +241,7 @@ class MyClass {
 
 Example:
 ```
-class Point3D {
+type Point3D {
     var x: int;
     var y: int;
     var z: int;

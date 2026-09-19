@@ -69,6 +69,7 @@ namespace xenon::ast {
             CLASS_METHOD_DECL,
             CLASS_STRUCTURE_DECL,
             CLASS_IMPLEMENTATION_DECL,
+            TYPE_ALIAS_DECL,
             
             // Special
             EOF_STMT,
@@ -604,6 +605,16 @@ namespace xenon::ast {
 
     using ClassImplementationDeclPtr = std::unique_ptr<ClassImplementationDecl>;
 
+    struct TypeAliasDecl : public Declaration {
+        std::string alias_name;
+        TypeExprPtr target_type;
+        bool is_public;
+        TypeAliasDecl(SourceLocation l, std::string name, TypeExprPtr target, bool p = false)
+            : Declaration(NodeKind::TYPE_ALIAS_DECL, std::move(l)),
+            alias_name(std::move(name)), target_type(std::move(target)), is_public(p) {}
+    };
+
+    using TypeAliasDeclPtr = std::unique_ptr<TypeAliasDecl>;
 
     struct EOFStmt : public Statement {
         explicit EOFStmt(SourceLocation l)

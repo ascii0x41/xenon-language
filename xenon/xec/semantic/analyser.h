@@ -97,6 +97,7 @@ namespace xenon::semantic {
         bool type_depends_on_by_value(const Type* from, const Type* target, std::unordered_set<const Type*>& visited) const;
 
         bool validate_delete(const ast::DeleteStmt* delete_stmt);
+        bool validate_type_alias(const ast::TypeAliasDecl* alias_decl);
 
         // Control flow
         ControlFlowResult validate_statement(const ast::Statement* stmt);

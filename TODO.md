@@ -27,10 +27,10 @@
 ## v0.2 — Generics, Iteration, Type System Expansion
 
 ### Type System
-- [ ] Replace `class` with `type`
-  - [ ] `type Age = u8;` (alias)
-  - [ ] `type Point { ... }` (struct)
-  - [ ] Parser disambiguation after name
+- [x] Replace `class` with `type`
+  - [x] `type Age = u8;` (alias)
+  - [x] `type Point { ... }` (struct)
+  - [x] Parser disambiguation after name
 - [ ] Optional types: `type OptionalString = string?;`
 - [ ] Result types: `type ValueOrError = i32!str;`
 - [ ] Copy-by-default semantics formalized

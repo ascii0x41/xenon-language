@@ -26,7 +26,7 @@ enum ResultCode {
 }
 
 // ============================================
-// Classes - Reworked
+// Types - Reworked
 // ============================================
 
 trait ToString {
@@ -38,13 +38,13 @@ trait Processable {
     func process();
 }
 
-class Point3D {
+type Point3D {
     pub var x: i32;
     pub var y: i32;
     pub var z: i32;
 }
 
-class DataBuffer {
+type DataBuffer {
     var data: ptr i32;
     var buffer_size: size;
 }
@@ -318,7 +318,7 @@ func run_tests() -> i32 {
     // String interpolation
     io::writeln($"Hello, {name}! The answer is {x}.");
 
-    // Class usage
+    // Type usage
     let p1 = Point3D(1, 2, 3);
     let p2 = Point3D(4, 5, 6);
     let p3 = p1 + p2;
