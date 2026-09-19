@@ -75,12 +75,12 @@
 - [ ] Parse `::<...>` in expression position
 
 ### Control Flow
-- [ ] `for` loops
+- [x] `for` loops
   ```xenon
   for x in collection { ... }
   ```
-- [ ] Desugars to `IntoIterator::into_iter` + `Iterator::next`
-- [ ] `break` / `continue` (with optional labels?)
+- [x] Desugars to `IntoIterator::into_iter` + `Iterator::next`
+- [x] `break` / `continue` (with optional labels?)
 
 ### Memory
 - [ ] `Box<T>` — unique ownership, just `*mut T`
