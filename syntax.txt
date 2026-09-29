@@ -7,14 +7,14 @@
 // 1. IMPORTS
 // ============================================================
 
-import io
-import math
-import utils::helpers
+import io;
+import math;
+import utils::helpers;
 
 module main;
 
 // ============================================================
-// 2. CLASSES (Structure + Implementation)
+// 2. STRUCTS (Declaration + Implementation)
 // ============================================================
 
 type Point {
@@ -83,11 +83,11 @@ impl Point {
 }
 
 // ============================================================
-// 3. CLASS WITH STATIC VARIABLES
+// 3. STRUCT WITH STATIC VARIABLES
 // ============================================================
 
 type Counter {
-    count: i32,
+    count: i32;
 }
 
 impl Counter {
@@ -105,10 +105,10 @@ impl Counter {
 }
 
 // ============================================================
-// 4. CLASS LITERALS
+// 4. STRUCT LITERALS
 // ============================================================
 
-func test_class_literals() -> i32 {
+func test_struct_literals() -> i32 {
 
     // Scalar types
     let a = size { 42 };
@@ -175,10 +175,10 @@ func explicit_void() -> void {
 }
 
 // ============================================================
-// 6. let MUTIABLE DECLARATIONS
+// 6. VARIABLE DECLARATIONS
 // ============================================================
 
-func let mutiable_declarations() -> void {
+func variable_declarations() -> void {
     // Immutable with type
     let a: i32 = 42;
 
@@ -367,7 +367,7 @@ func main() -> i32 {
     let result = add(1, 2);
     no_params();
 
-    // let mutiables
+    // variables
     let a: i32 = 42;
     let mut b: i32 = 10;
     b = b + 1;
@@ -380,4 +380,4 @@ func main() -> i32 {
 
     // Return
     return 0;
-} 
+}
