@@ -1,0 +1,81 @@
+module io;
+
+pub enum IOError {
+    NotFound,
+    PermissionDenied,
+    AlreadyExists,
+    InvalidPath,
+    InvalidMode,
+    ReadFailed,
+    WriteFailed,
+    Closed
+}
+
+pub type Bytes = [u8];
+
+
+pub enum SerialiseError {
+    SerialiseError
+}
+
+pub trait Serialise {
+    func serialise(&Self) -> string?SerialiseError;
+}
+
+pub enum EncodeError {
+    EncodeError
+}
+
+pub trait Encode {
+    func encode(&Self) -> Bytes?EncodeError;
+}
+
+pub trait Write {
+    func write<T: Serialise>(&mut Self, value: T) -> ?IOError;
+    func write(&mut Self, value: string) -> ?IOError;
+}
+
+pub trait Read {
+    func read(&Self, size) -> string?IOError;
+}
+
+pub trait Append {
+    func append<T: Serialise>(&mut Self, value: T) -> ?IOError;
+    func append(&mut Self, value: string) -> ?IOError;
+}
+
+pub trait WriteBytes {
+    func write_bytes<T: Encode>(&mut Self, value: T) -> ?IOError;
+    func write_bytes(&mut Self, value: Bytes) -> ?IOError;
+}
+
+pub trait ReadBytes {
+    func read_bytes(&Self, size) -> string?IOError;
+}
+
+pub trait AppendBytes {
+    func append_bytes<T: Encode>(&mut Self, value: T) -> ?IOError;
+    func append_bytes(&mut Self, value: Bytes) -> ?IOError;
+}
+
+pub flags FileMode {    // Experimental. Not confirmed feature yet!
+    Read,
+    Write,
+    Append,
+    Create,
+    CreateNew,
+    Truncate,
+    Binary
+}
+
+pub type File {
+    handle: size;
+    flags: FileMode;
+}
+
+pub func open(path: string, mode: FileMode = FileMode::Read) -> File?IOError {
+    // TODO
+}
+
+impl File {
+}

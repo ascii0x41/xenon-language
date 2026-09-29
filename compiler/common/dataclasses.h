@@ -5,7 +5,10 @@
 #include <memory>
 #include <filesystem>
 #include <unordered_map>
+#include <optional>
 #include <format>
+#include <cctype>
+#include <algorithm>
 
 namespace xenon {
     namespace fs = std::filesystem;
@@ -108,6 +111,17 @@ namespace xenon::config {
         IGNORE, WARN, ERROR // -W0, -W1, -W2
     };
 
+    enum class TargetType {
+        X86_64_LINUX,
+        X86_64_WINDOWS,
+        X86_64_MACOS,
+    };
+
+    struct TargetInfo {
+        TargetType type;
+        const char* llvm_triple;
+    };
+
     // ============================================
     // ONE config struct
     // ============================================
@@ -122,7 +136,8 @@ namespace xenon::config {
         // ---- From TOML or CLI ----
         fs::path output_dir = "build/";
         std::string output_name;        // derived from project_name if empty; empty is unambiguous, no flag needed
-        std::string target_triple = "x86_64-linux";
+        std::string target_triple;
+        TargetInfo target_info{TargetType::X86_64_LINUX, "x86_64-pc-linux-gnu"};
         OptimisationLevel opt_level = OptimisationLevel::DEBUG;
         WarningLevel warning_level = WarningLevel::WARN;
 
@@ -160,6 +175,28 @@ namespace xenon::config {
         if (s == "ignore") return WarningLevel::IGNORE;
         if (s == "error") return WarningLevel::ERROR;
         return WarningLevel::WARN;
+    }
+
+    inline std::optional<TargetInfo> parse_target_triple(const std::string& s) {
+        if (s.empty()) {
+            return std::nullopt;
+        }
+
+        std::string normalized = s;
+        std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+        if (normalized == "x86_64-linux" || normalized == "x86_64-pc-linux-gnu") {
+            return TargetInfo{TargetType::X86_64_LINUX, "x86_64-pc-linux-gnu"};
+        }
+        if (normalized == "x86_64-windows" || normalized == "x86_64-pc-windows-msvc") {
+            return TargetInfo{TargetType::X86_64_WINDOWS, "x86_64-pc-windows-msvc"};
+        }
+        if (normalized == "x86_64-macos" || normalized == "x86_64-apple-darwin") {
+            return TargetInfo{TargetType::X86_64_MACOS, "x86_64-apple-darwin"};
+        }
+
+        return std::nullopt;
     }
 
 } // namespace xenon::config

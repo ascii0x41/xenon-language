@@ -413,10 +413,23 @@ namespace xenon::ast {
 
     struct NewExpr : public Expression {
         TypeExprPtr alloc_type;
+        ExpressionPtr alloc_expr;
         std::vector<ExpressionPtr> initialiser_args;
 
         NewExpr(SourceLocation l, TypeExprPtr type, std::vector<ExpressionPtr> init = {})
-            : Expression(NodeKind::NEW_EXPR, std::move(l)), alloc_type(std::move(type)), initialiser_args(std::move(init)) {}
+            : Expression(NodeKind::NEW_EXPR, std::move(l)),
+              alloc_type(std::move(type)),
+              alloc_expr(nullptr),
+              initialiser_args(std::move(init)) {}
+
+        explicit NewExpr(SourceLocation l, ExpressionPtr expr)
+            : Expression(NodeKind::NEW_EXPR, std::move(l)),
+              alloc_type(nullptr),
+              alloc_expr(std::move(expr)),
+              initialiser_args() {}
+
+        [[nodiscard]] bool is_type_form() const { return alloc_type != nullptr; }
+        [[nodiscard]] bool is_expression_form() const { return alloc_expr != nullptr; }
     };
 
     struct DeleteStmt : public Statement {

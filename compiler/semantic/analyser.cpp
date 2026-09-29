@@ -7,24 +7,20 @@ namespace xenon::semantic {
         : namespace_tree_(namespace_tree), options_(options), type_registry_(), global_scope_("global") {
         (void)namespace_tree;
 
-        const std::string& triple = options.target_triple;
-        if (triple.find("64") != std::string::npos
-            || triple.find("aarch64") != std::string::npos
-            || triple.find("arm64") != std::string::npos
-            || triple.find("wasm64") != std::string::npos) {
-            WORD_SIZE = 8;
-            WORD_ALIGN = 8;
-        } else if (triple.find("32") != std::string::npos
-                || triple.find("i386") != std::string::npos
-                || triple.find("i686") != std::string::npos
-                || triple.find("wasm32") != std::string::npos) {
-            WORD_SIZE = 4;
-            WORD_ALIGN = 4;
-        } else {
-            warn(std::format("Unrecognized target triple '{}', defaulting to 64-bit word size and alignment", triple),
-                SourceLocation{0, 0, "xec"});
-            WORD_SIZE = 8;
-            WORD_ALIGN = 8;
+        switch (options.target_info.type) {
+            case config::TargetType::X86_64_LINUX:
+            case config::TargetType::X86_64_WINDOWS:
+            case config::TargetType::X86_64_MACOS:
+                WORD_SIZE = 8;
+                WORD_ALIGN = 8;
+                break;
+            default:
+                warn(std::format("Unrecognized target type '{}', defaulting to 64-bit word size and alignment",
+                    static_cast<int>(options.target_info.type)),
+                    SourceLocation{0, 0, "xec"});
+                WORD_SIZE = 8;
+                WORD_ALIGN = 8;
+                break;
         }
 
         type_registry_.initialise_builtin_types(global_scope_);
@@ -699,6 +695,9 @@ namespace xenon::semantic {
                 const auto* literal = static_cast<const ast::LiteralClass*>(ast);
 
                 Type* literal_type = resolve_type_expression(literal->type_expr);
+
+                std::cout << literal_type->name << std::endl;
+
                 if (!literal_type || literal_type->kind == TypeKind::ERROR) {
                     return type_registry_.get_error_type();
                 }
@@ -715,6 +714,65 @@ namespace xenon::semantic {
                     return type_registry_.get_error_type();
                 }
 
+                // Array handling
+                if (literal_type->kind == TypeKind::ARRAY) {
+                    const auto* array_type = static_cast<const ArrayType*>(literal_type);
+                    if (array_type->length.has_value()) {
+                        // Static array
+                        const auto static_array_length = array_type->length.value();
+                        if (!(initialisers.size() < static_array_length)) {
+                            error(
+                                std::format(
+                                    "Too few elements for '{}' (expected {}, got {})",
+                                    literal_type->name,
+                                    static_array_length,
+                                    initialisers.size()
+                                ),
+                                literal->location
+                            );
+                            return type_registry_.get_error_type();
+                        }
+                        
+                        if (!(initialisers.size() > static_array_length)) {
+                            error(
+                                std::format(
+                                    "Too many elements for '{}' (expected {}, got {})",
+                                    literal_type->name,
+                                    static_array_length,
+                                    initialisers.size()
+                                ),
+                                literal->location
+                            );
+                            return type_registry_.get_error_type();
+                        }
+                    }
+                    for (const auto& initialiser : initialisers) {
+                        const Type *initialiser_type = evaluate_expression(initialiser.get());
+
+                        // Avoid cascading errors.
+                        if (initialiser_type->kind == TypeKind::ERROR) {
+                            continue;
+                        }
+
+                        if (!type_registry_.can_implicitly_convert(
+                            initialiser_type,
+                            array_type->element_type
+                        )) {
+                            error(
+                                std::format(
+                                    "Incompatible element for '{}' (expected '{}', got '{}')",
+                                    array_type->name,
+                                    array_type->element_type->name,
+                                    initialiser_type->name
+                                ),
+                                initialiser->location
+                            );
+
+                            continue;
+                        }
+
+                    }
+                }
                 // Scalar type handling
                 if (type_registry_.is_integer(literal_type) ||
                     type_registry_.is_floating(literal_type) ||
@@ -834,6 +892,14 @@ namespace xenon::semantic {
             case ast::ASTNode::NodeKind::NEW_EXPR: {
                 const auto* heap_alloc_literal = static_cast<const ast::NewExpr*>(ast);
 
+                if (heap_alloc_literal->is_expression_form()) {
+                    Type* alloc_type = evaluate_expression(heap_alloc_literal->alloc_expr.get());
+                    if (!alloc_type || alloc_type->kind == TypeKind::ERROR) {
+                        return type_registry_.get_error_type();
+                    }
+                    return alloc_type;
+                }
+
                 Type* heap_alloc_literal_type = resolve_type_expression(heap_alloc_literal->alloc_type);
                 if (!heap_alloc_literal_type || heap_alloc_literal_type->kind == TypeKind::ERROR) {
                     return type_registry_.get_error_type();
@@ -841,22 +907,15 @@ namespace xenon::semantic {
 
                 const auto& initialisers = heap_alloc_literal->initialiser_args;
 
+                if (initialisers.empty()) {
+                    return heap_alloc_literal_type;
+                }
+
                 // Scalar type handling
                 if (type_registry_.is_integer(heap_alloc_literal_type) ||
                     type_registry_.is_floating(heap_alloc_literal_type) ||
                     heap_alloc_literal_type == type_registry_.get_builtin_type(
                         BuiltinType::BuiltinKind::CHAR)) {
-
-                    if (initialisers.empty()) {
-                        error(
-                            std::format(
-                                "Missing initialiser for value of type '{}'",
-                                heap_alloc_literal_type->name
-                            ),
-                            heap_alloc_literal->location
-                        );
-                        return type_registry_.get_error_type();
-                    }
 
                     if (initialisers.size() > 1) {
                         error(
@@ -1053,6 +1112,7 @@ namespace xenon::semantic {
                     }
 
                     const std::string& method_name = member_access->member->identifier;
+// DEBUG                    std::cout << "DEBUG: METHOD NAME " << method_name << std::endl;
                     auto method_it = object_type->methods.find(method_name);
                     if (method_it == object_type->methods.end() || method_it->second.empty()) {
                         error(std::format("Type '{}' has no method '{}'", object_type->name, method_name), member_access->location);

@@ -2,18 +2,18 @@
 # Xenon TODO
 
 ## Guiding Principles
+- Expressive but predictable language design
+- Modern compiler architecture
+- Somewhat safe systems programming; unsafety is explicit and visible
+- Scientific and numerical computing
 - Explicit over implicit (self, mutability, visibility)
 - Structural literals, not constructors
-- Copy-by-default, opt-in reference semantics
-- C-family syntax, Rust-family rigor
-
 
 
 ## v0.1 — DONE
-- [x] Modules (`module main;`, `import`)
-- [x] Functions (`func`, `-> T` return types)
-- [x] Variables (`let`), constants (`let` in impl)
-- [x] `if` / `while`
+- [x] Immutable and mutable bindings (`let`, `let mut`)
+- [x] Functions (`pub? func <name>(<params>)[-> <return type>]?`)
+- [x] Selection and iteration (`if`, `while`)
 - [x] Structs via `class` (soon `type`)
 - [x] Methods, static methods
 - [x] Fields, static fields
@@ -21,6 +21,7 @@
 - [x] Structural literals (`Point { x, y }`)
 - [x] `impl` blocks separating structure from behavior
 - [x] Explicit `self: &T` / `self: &mut T`
+- [x] Modules (`module main;`, `import`)
 
 
 
@@ -36,6 +37,15 @@
 - [ ] Copy-by-default semantics formalized
   - [ ] Which types are Copy? (primitives yes, structs if all fields Copy)
   - [ ] Reference types (`&T`, `&mut T`) always Copy
+#### Test case:
+  ```
+  type Age = u8; // Alias
+  type Point {
+      x: f32;
+      y: f32;
+      z: f32
+  }
+  ```
 
 ### Generics
 - [ ] Generic types: `type Box<T> { data: *mut T; }`

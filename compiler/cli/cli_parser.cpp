@@ -119,6 +119,7 @@ Examples:
             } else if (arg == "--target") {
                 if (i + 1 < argc) {
                     config.target_triple = argv[++i];
+                    config.target_triple_explicit = true;
                 } else {
                     std::cerr << "Error: --target requires a value\n";
                     std::exit(1);

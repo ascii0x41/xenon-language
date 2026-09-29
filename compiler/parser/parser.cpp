@@ -481,28 +481,102 @@ namespace xenon::parser {
     ExpressionPtr Parser::parse_array_literal() {
         SourceLocation l = loc();
         expect(TokenType::LBRACKET, "Expected '['");
+
+        // Support both:
+        //   [expr, expr, ...]
+        //   [T; N]{init1, init2, ...}
+        const size_t checkpoint = current_;
+        try {
+            auto type_expr = parse_type_expression();
+            if (accept(TokenType::SEMICOLON)) {
+                auto size_expr = parse_expression();
+                (void)size_expr;
+                expect(TokenType::RBRACKET, "Expected ']' to close typed array literal");
+
+                std::vector<ExpressionPtr> elems;
+                if (accept(TokenType::LBRACE)) {
+                    if (!check(TokenType::RBRACE)) {
+                        do {
+                            elems.push_back(parse_expression());
+                        } while (accept(TokenType::COMMA));
+                    }
+                    expect(TokenType::RBRACE, "Expected '}' to close array initialiser");
+                }
+
+                return std::make_unique<LiteralArray>(l, std::move(elems));
+            }
+        } catch (...) {
+            // Not a typed array literal; fall back to the normal expression list form.
+            current_ = checkpoint;
+        }
+
         std::vector<ExpressionPtr> elems;
-        if (peek().type != TokenType::RBRACKET)
-            do { elems.push_back(parse_expression()); } while (accept(TokenType::COMMA));
+        if (!check(TokenType::RBRACKET)) {
+            do {
+                elems.push_back(parse_expression());
+            } while (accept(TokenType::COMMA));
+        }
         expect(TokenType::RBRACKET, "Expected ']' to close array literal");
         return std::make_unique<LiteralArray>(l, std::move(elems));
     }
 
     ExpressionPtr Parser::parse_new_expr() {
         SourceLocation l = loc();
-        auto alloc_type = parse_type_expression();
 
-        std::vector<ExpressionPtr> init_args;
-        if (accept(TokenType::LBRACE)) {
-            if (!check(TokenType::RBRACE)) {
-                do {
-                    init_args.push_back(parse_expression());
-                } while (accept(TokenType::COMMA));
+        // Xenon supports both:
+        //   new Type { ... }
+        //   new <expression>
+        // Prefer the type form only when the token sequence after `new` is
+        // type-like and ends cleanly; otherwise treat it as a general expression.
+        if (check(TokenType::STAR) || check(TokenType::AMP) || check(TokenType::LBRACKET) || check(TokenType::IDENTIFIER)) {
+            const size_t checkpoint = current_;
+            try {
+                auto alloc_type = parse_type_expression();
+
+                const bool is_type_term =
+                    check(TokenType::LBRACE) ||
+                    check(TokenType::SEMICOLON) ||
+                    check(TokenType::COMMA) ||
+                    check(TokenType::RBRACE) ||
+                    check(TokenType::RPAREN) ||
+                    check(TokenType::RBRACKET) ||
+                    check(TokenType::EOF_TOKEN) ||
+                    check(TokenType::COLON) ||
+                    check(TokenType::EQ) ||
+                    check(TokenType::PLUS_EQ) ||
+                    check(TokenType::MINUS_EQ) ||
+                    check(TokenType::STAR_EQ) ||
+                    check(TokenType::SLASH_EQ) ||
+                    check(TokenType::PERCENT_EQ) ||
+                    check(TokenType::AMP_EQ) ||
+                    check(TokenType::PIPE_EQ) ||
+                    check(TokenType::CARET_EQ) ||
+                    check(TokenType::LT_LT_EQ) ||
+                    check(TokenType::GT_GT_EQ) ||
+                    check(TokenType::QUESTION);
+
+                if (is_type_term) {
+                    std::vector<ExpressionPtr> init_args;
+                    if (accept(TokenType::LBRACE)) {
+                        if (!check(TokenType::RBRACE)) {
+                            do {
+                                init_args.push_back(parse_expression());
+                            } while (accept(TokenType::COMMA));
+                        }
+                        expect(TokenType::RBRACE, "Expected '}' to close object initialiser");
+                    }
+
+                    return std::make_unique<NewExpr>(l, std::move(alloc_type), std::move(init_args));
+                }
+            } catch (...) {
+                // Fall through to the ordinary expression form.
             }
-            expect(TokenType::RBRACE, "Expected '}' to close object initialiser");
+
+            current_ = checkpoint;
         }
 
-        return std::make_unique<NewExpr>(l, std::move(alloc_type), std::move(init_args));
+        auto alloc_expr = parse_expression();
+        return std::make_unique<NewExpr>(l, std::move(alloc_expr));
     }
 
     ExpressionPtr Parser::parse_class_literal(SourceLocation l, TypeExprPtr type_expr) {

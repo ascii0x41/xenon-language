@@ -1,0 +1,69 @@
+// ============================================================
+// runtime.xe — Builtin declarations
+//
+// This file is loaded unconditionally by the compiler before
+// any user code is parsed. It is NOT a module: there is no
+// `module` line, and nothing needs to `import` it. The names
+// declared here are reserved — user code cannot define a free
+// function or type with the same name and signature.
+//
+// Every function below is a thin binding to a symbol exported
+// by the Xenon C runtime (xenon_rt.h / xenon_rt.c). The
+// compiler is expected to link `xenon_rt` into every produced
+// binary.
+// ============================================================
+
+// ------------------------------------------------------------
+// Panic / assert / exit
+// ------------------------------------------------------------
+
+/*
+    Abort the program with a message printed to stderr, then
+    exit with status 101. Never returns.
+   
+    The `noreturn` attribute tells the type checker that control
+    flow does not continue past a call to `panic`, so patterns
+    like the following type-check without a trailing `return`:
+   
+        if b == 0 {
+            panic("division by zero");
+        }
+        return a / b;
+*/
+#[extern("C"), link_name("xenon_panic"), noreturn]
+pub func panic(message: string);
+
+/*
+    If `condition` is false, calls `panic(message)`. Otherwise
+    returns normally. Intended for internal invariants and
+    debugging; for user-facing error handling, prefer explicit
+    checks once `Result`/`Option` are available.
+*/
+#[extern("C"), link_name("xenon_assert")]
+pub func assert(condition: bool, message: string);
+
+/*
+    Terminate the process with the given exit code. Never returns.
+   
+        exit(0);   // success
+        exit(1);   // generic failure
+   
+    Note that returning normally from `main` is equivalent to
+    `exit(0)`; use `exit` only when you need a non-zero status or
+    want to terminate early.
+*/
+#[extern("C"), link_name("xenon_exit"), noreturn]
+pub func exit(code: i32);
+
+// ------------------------------------------------------------
+// Output
+// ------------------------------------------------------------
+
+/*
+    Print a string followed by a newline to stdout.
+   
+    The newline is always `\n` (LF), regardless of platform. If
+    you need platform-native line endings, append them yourself.
+*/
+#[extern("C"), link_name("xenon_println")]
+pub func println(s: string);

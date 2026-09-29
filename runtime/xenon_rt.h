@@ -36,7 +36,7 @@ typedef struct {
 typedef size_t XENON_SIZE;
 
 // Booleans & Characters
-typedef bool XENON_BOOL;
+typedef XENON_U8 XENON_BOOL;
 typedef uint32_t XENON_CHAR; // UTF-32 for standalone characters
 
 // Built-in Immutable String Types
@@ -72,8 +72,8 @@ XENON_ABI void xenon_cplx128_iadd(XENON_CPLX128* a, XENON_CPLX128 b);
 XENON_ABI void xenon_cplx128_isub(XENON_CPLX128* a, XENON_CPLX128 b);
 XENON_ABI void xenon_cplx128_imul(XENON_CPLX128* a, XENON_CPLX128 b);
 XENON_ABI void xenon_cplx128_idiv(XENON_CPLX128* a, XENON_CPLX128 b);
-XENON_ABI bool xenon_cplx128_eq(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI bool xenon_cplx128_neq(XENON_CPLX128 a, XENON_CPLX128 b);
+XENON_ABI XENON_BOOL xenon_cplx128_eq(XENON_CPLX128 a, XENON_CPLX128 b);
+XENON_ABI XENON_BOOL xenon_cplx128_neq(XENON_CPLX128 a, XENON_CPLX128 b);
 XENON_ABI XENON_F64 xenon_cplx128_abs(XENON_CPLX128 c);
 XENON_ABI XENON_CPLX128 xenon_cplx128_conj(XENON_CPLX128 c);
 XENON_ABI XENON_CPLX128 xenon_cplx128_polar(XENON_F64 magnitude, XENON_F64 angle);
@@ -86,8 +86,8 @@ XENON_ABI XENON_STRING xenon_init_string(const XENON_U8* bytes, XENON_SIZE lengt
 XENON_ABI XENON_STRING xenon_string_from_cstr(const char* str); // String creation from C string (convenience for codegen)
 XENON_ABI XENON_STRING xenon_string_add(XENON_STRING a, XENON_STRING b);
 XENON_ABI XENON_STRING xenon_string_mul(XENON_STRING a, XENON_SIZE times);
-XENON_ABI bool xenon_string_eq(XENON_STRING a, XENON_STRING b);
-XENON_ABI bool xenon_string_neq(XENON_STRING a, XENON_STRING b);
+XENON_ABI XENON_BOOL xenon_string_eq(XENON_STRING a, XENON_STRING b);
+XENON_ABI XENON_BOOL xenon_string_neq(XENON_STRING a, XENON_STRING b);
 XENON_ABI void xenon_string_drop(XENON_STRING* str);
 
 // ============================================================================

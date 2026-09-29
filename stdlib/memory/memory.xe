@@ -1,0 +1,55 @@
+module memory;
+
+pub type MemoryError {
+    OutOfMemory,
+    InvalidSize
+}
+
+#[extern("C")]
+func xenon_alloc(size: size) -> *mut void;
+
+#[extern("C")]
+func xenon_free(ptr: *mut void);
+
+#[extern("C")]
+func xenon_array_alloc(
+    element_size: size,
+    count: size
+) -> *mut void;
+
+#[extern("C")]
+func xenon_array_free(ptr: *mut void);
+
+
+pub func allocate<T>() -> (*mut T)?MemoryError {
+    let ptr = xenon_alloc(sizeof(T));
+
+    if ptr == null {
+        return MemoryError.OutOfMemory;
+    }
+
+    return cast<*mut T>(ptr);
+}
+
+
+pub func allocate_array<T>(
+    length: size
+) -> (*mut T)?MemoryError {
+    let ptr = xenon_array_alloc(sizeof(T), length);
+
+    if ptr == null {
+        return MemoryError.OutOfMemory;
+    }
+
+    return cast<*mut T>(ptr);
+}
+
+
+pub func free<T>(ptr: *mut T) {
+    xenon_free(cast<*mut void>(ptr));
+}
+
+
+pub func free_array<T>(ptr: *mut T) {
+    xenon_array_free(cast<*mut void>(ptr));
+}

@@ -1,0 +1,255 @@
+module math;
+
+// ============================================================
+// Constants
+// ============================================================
+
+pub const PI:  f64 = 3.14159265358979323846;
+pub const E:   f64 = 2.71828182845904523536;
+pub const TAU: f64 = 6.28318530717958647692;
+pub const INF: f64 = 1.0 / 0.0;   // TODO: replace with a proper literal / intrinsic once available
+pub const NAN: f64 = 0.0 / 0.0;   // TODO: same
+
+// ============================================================
+// Integer utilities (pure Xenon, no libm dependency)
+// ============================================================
+
+pub func abs(x: i64) -> i64 {
+    if x < 0 { return -x; }
+    return x;
+}
+
+pub func abs(x: i32) -> i32 {
+    if x < 0 { return -x; }
+    return x;
+}
+
+pub func sign(x: i64) -> i64 {
+    if x > 0 { return 1; }
+    if x < 0 { return -1; }
+    return 0;
+}
+
+pub func min(a: i64, b: i64) -> i64 {
+    if a < b { return a; }
+    return b;
+}
+
+pub func max(a: i64, b: i64) -> i64 {
+    if a > b { return a; }
+    return b;
+}
+
+pub func clamp(x: i64, lo: i64, hi: i64) -> i64 {
+    if lo > hi { panic($"math::clamp: lo ({lo}) > hi ({hi})"); }
+    if x < lo { return lo; }
+    if x > hi { return hi; }
+    return x;
+}
+
+// ============================================================
+// Float utilities (wrappers around libm where the C name differs,
+// or where we want a stable Xenon-level API)
+// ============================================================
+
+pub func abs(x: f64) -> f64 {
+    return fabs(x);
+}
+
+pub func abs(x: f32) -> f32 {
+    return fabsf(x);
+}
+
+pub func sign(x: f64) -> f64 {
+    if x > 0.0 { return 1.0; }
+    if x < 0.0 { return -1.0; }
+    return x;   // preserves +0.0, -0.0, NaN
+}
+
+pub func min(a: f64, b: f64) -> f64 {
+    return fmin(a, b);
+}
+
+pub func max(a: f64, b: f64) -> f64 {
+    return fmax(a, b);
+}
+
+pub func clamp(x: f64, lo: f64, hi: f64) -> f64 {
+    if lo > hi { panic($"math::clamp: lo ({lo}) > hi ({hi})"); }
+    return fmin(fmax(x, lo), hi);
+}
+
+// ============================================================
+// Combinatorics
+// ============================================================
+
+// Returns `n!` for `n` in `[0, 20]`. Panics on overflow (n > 20).
+pub func factorial(n: u64) -> u64 {
+    if n > 20 {
+        panic($"math::factorial: {n}! overflows u64 (max is 20!)");
+    }
+    let mut result: u64 = 1;
+    let mut i: u64 = 2;
+    while i <= n {
+        result *= i;
+        i += 1;
+    }
+    return result;
+}
+
+/*
+// Returns `None` on overflow instead of panicking.
+pub func factorial_checked(n: u64) -> Option<u64> {
+    if n > 20 { return None; }
+    let mut result: u64 = 1;
+    let mut i: u64 = 2;
+    while i <= n {
+        result *= i;
+        i += 1;
+    }
+    return Some(result);
+}
+*/
+
+// Falling factorial: n! / (n - r)! = n * (n-1) * ... * (n-r+1).
+// Panics if `r > n` or if the result overflows u64.
+pub func perm(n: u64, r: u64) -> u64 {
+    if r > n {
+        panic($"math::perm: r ({r}) > n ({n})");
+    }
+    let mut result: u64 = 1;
+    let mut i: u64 = 0;
+    while i < r {
+        // Checked multiply so we panic with a clear message instead of wrapping.
+        if result > 0xFFFF_FFFF_FFFF_FFFF / (n - i) {
+            panic($"math::perm: P({n}, {r}) overflows u64");
+        }
+        result *= n - i;
+        i += 1;
+    }
+    return result;
+}
+
+/*
+pub func perm_checked(n: u64, r: u64) -> Option<u64> {
+    if r > n { return None; }
+    let mut result: u64 = 1;
+    let mut i: u64 = 0;
+    while i < r {
+        if result > 0xFFFF_FFFF_FFFF_FFFF / (n - i) { return None; }
+        result *= n - i;
+        i += 1;
+    }
+    return Some(result);
+}
+*/
+
+// Binomial coefficient C(n, r). Overflow-safe internally (GCD-reduced);
+// panics only if the final result exceeds u64.
+pub func comb(n: u64, r: u64) -> u64 {
+    if r > n {
+        panic($"math::comb: r ({r}) > n ({n})");
+    }
+    if r == 0 or r == n { return 1; }
+    if r > n - r { r = n - r; }
+
+    let mut result: u64 = 1;
+    let mut i: u64 = 1;
+    while i <= r {
+        let mut num: u64 = n - r + i;
+        let mut den: u64 = i;
+        let g: u64 = gcd(num, den);
+        num /= g;
+        den /= g;
+        // den divides result mathematically; result/den * num is the next C(...).
+        // Check the multiply so we panic cleanly on overflow of the *result*.
+        let quotient: u64 = result / den;
+        if quotient > 0xFFFF_FFFF_FFFF_FFFF / num {
+            panic($"math::comb: C({n}, {r}) overflows u64");
+        }
+        result = quotient * num;
+        i += 1;
+    }
+    return result;
+}
+
+/*
+pub func comb_checked(n: u64, r: u64) -> Option<u64> {
+    if r > n { return None; }
+    if r == 0 or r == n { return Some(1); }
+    if r > n - r { r = n - r; }
+
+    let mut result: u64 = 1;
+    let mut i: u64 = 1;
+    while i <= r {
+        let mut num: u64 = n - r + i;
+        let mut den: u64 = i;
+        let g: u64 = gcd(num, den);
+        num /= g;
+        den /= g;
+        let quotient: u64 = result / den;
+        if quotient > 0xFFFF_FFFF_FFFF_FFFF / num { return None; }
+        result = quotient * num;
+        i += 1;
+    }
+    return Some(result);
+}
+*/
+
+// Euclidean GCD. Public because it's generally useful and cheap.
+pub func gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let t: u64 = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+pub func lcm(a: u64, b: u64) -> u64 {
+    if a == 0 or b == 0 { return 0; }
+    // Divide first to avoid overflowing on a * b.
+    return (a / gcd(a, b)) * b;
+}
+
+// ============================================================
+// Float functions — direct re-exports of libm symbols.
+// (Names chosen to match the C symbol so no wrapper is needed.)
+// ============================================================
+
+#[extern("C")] pub func sqrt(x: f64) -> f64;
+#[extern("C")] pub func cbrt(x: f64) -> f64;
+#[extern("C")] pub func pow(x: f64, y: f64) -> f64;
+#[extern("C")] pub func exp(x: f64) -> f64;
+#[extern("C")] pub func exp2(x: f64) -> f64;
+#[extern("C")] pub func log(x: f64) -> f64;
+#[extern("C")] pub func log2(x: f64) -> f64;
+#[extern("C")] pub func log10(x: f64) -> f64;
+#[extern("C")] pub func hypot(x: f64, y: f64) -> f64;
+
+#[extern("C")] pub func sin(x: f64) -> f64;
+#[extern("C")] pub func cos(x: f64) -> f64;
+#[extern("C")] pub func tan(x: f64) -> f64;
+#[extern("C")] pub func asin(x: f64) -> f64;
+#[extern("C")] pub func acos(x: f64) -> f64;
+#[extern("C")] pub func atan(x: f64) -> f64;
+#[extern("C")] pub func atan2(y: f64, x: f64) -> f64;
+
+#[extern("C")] pub func sinh(x: f64) -> f64;
+#[extern("C")] pub func cosh(x: f64) -> f64;
+#[extern("C")] pub func tanh(x: f64) -> f64;
+#[extern("C")] pub func asinh(x: f64) -> f64;
+#[extern("C")] pub func acosh(x: f64) -> f64;
+#[extern("C")] pub func atanh(x: f64) -> f64;
+
+#[extern("C")] pub func floor(x: f64) -> f64;
+#[extern("C")] pub func ceil(x: f64) -> f64;
+#[extern("C")] pub func round(x: f64) -> f64;
+#[extern("C")] pub func trunc(x: f64) -> f64;
+#[extern("C")] pub func fmod(x: f64, y: f64) -> f64;
+
+// Private externs — the C symbol names we don't want to expose directly.
+#[extern("C")] func fabs(x: f64) -> f64;
+#[extern("C")] func fabsf(x: f32) -> f32;
+#[extern("C")] func fmin(a: f64, b: f64) -> f64;
+#[extern("C")] func fmax(a: f64, b: f64) -> f64;

@@ -62,11 +62,11 @@ XENON_ABI void xenon_cplx128_idiv(XENON_CPLX128* a, XENON_CPLX128 b) {
     a->imag = (a->imag * b.real - old_real * b.imag) / denominator;
 }
 
-XENON_ABI bool xenon_cplx128_eq(XENON_CPLX128 a, XENON_CPLX128 b) {
+XENON_ABI XENON_BOOL xenon_cplx128_eq(XENON_CPLX128 a, XENON_CPLX128 b) {
     return a.real == b.real && a.imag == b.imag;
 }
 
-XENON_ABI bool xenon_cplx128_neq(XENON_CPLX128 a, XENON_CPLX128 b) {
+XENON_ABI XENON_BOOL xenon_cplx128_neq(XENON_CPLX128 a, XENON_CPLX128 b) {
     return !(a.real == b.real && a.imag == b.imag);
 }
 
@@ -133,12 +133,12 @@ XENON_ABI XENON_STRING xenon_string_mul(XENON_STRING a, XENON_SIZE times) {
     return result;
 }
 
-XENON_ABI bool xenon_string_eq(XENON_STRING a, XENON_STRING b) {
+XENON_ABI XENON_BOOL xenon_string_eq(XENON_STRING a, XENON_STRING b) {
     if (a.length != b.length) return false;
     return memcmp(a.bytes, b.bytes, a.length) == 0;
 }
 
-XENON_ABI bool xenon_string_neq(XENON_STRING a, XENON_STRING b) {
+XENON_ABI XENON_BOOL xenon_string_neq(XENON_STRING a, XENON_STRING b) {
     return !xenon_string_eq(a, b);
 }
 
@@ -227,26 +227,16 @@ XENON_ABI void xenon_free(void* ptr) {
     free(ptr);
 }
 
-XENON_ABI void* xenon_realloc(void* ptr, XENON_SIZE new_size) {
-    return realloc(ptr, new_size);
-}
-
 XENON_ABI void* xenon_array_alloc(XENON_SIZE element_size, XENON_SIZE count) {
-    // Allocate extra 2 words for length & capacity (like a slice header)
-    // Layout: [length:8 bytes][capacity:8 bytes][elements...]
-    XENON_SIZE header_size = 2 * sizeof(XENON_SIZE);
-    XENON_U8* data = (XENON_U8*)malloc(header_size + element_size * count);
-    if (!data) return NULL;
-    
-    ((XENON_SIZE*)data)[0] = count;  // length
-    ((XENON_SIZE*)data)[1] = count;  // capacity
-    
-    return data + header_size;
+    if (count == 0) return NULL;
+
+    if (element_size > SIZE_MAX / count) {
+        return NULL;
+    }
+
+    return malloc(element_size * count);
 }
 
-XENON_ABI void xenon_array_free(void* data) {
-    if (data) {
-        XENON_U8* header = (XENON_U8*)data - 2 * sizeof(XENON_SIZE);
-        free(header);
-    }
+XENON_ABI void xenon_array_free(void* ptr) {
+    free(ptr);
 }

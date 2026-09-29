@@ -10,6 +10,10 @@
 #include <sstream>
 #include <format>
 
+#ifndef XENON_DEFAULT_TRIPLE
+#define XENON_DEFAULT_TRIPLE "unknown"
+#endif
+
 namespace xenon::driver {
 
     namespace {
@@ -26,7 +30,7 @@ source_files = [
 
 [build]
 output = "build/"
-target = "x86_64-linux"
+target = ")" XENON_DEFAULT_TRIPLE R"("
 optimisation = "debug"
 )";
 
@@ -354,6 +358,17 @@ func main() -> i32 {
             cfg.opt_level = config::parse_opt_level(it->second);
         }
 
+        if (!cfg.target_triple.empty()) {
+            const auto parsed = config::parse_target_triple(cfg.target_triple);
+            if (!parsed) {
+                throw CompilerException(
+                    std::format("Unsupported target triple '{}'. Supported targets: x86_64-linux, x86_64-windows, x86_64-macos", cfg.target_triple),
+                    common::SourceLocation{0, 0, "xenon.toml"}
+                );
+            }
+            cfg.target_info = *parsed;
+        }
+
         return cfg;
     }
 
@@ -394,6 +409,21 @@ func main() -> i32 {
         }
         if (cli.warning_level_explicit) {
             merged.warning_level = cli.warning_level;
+        }
+
+        if (!merged.target_triple.empty()) {
+            const auto parsed = config::parse_target_triple(merged.target_triple);
+            if (!parsed) {
+                throw CompilerException(
+                    std::format("Unsupported target triple '{}'. Supported targets: x86_64-linux, x86_64-windows, x86_64-macos", merged.target_triple),
+                    common::SourceLocation{0, 0, toml_path.string()}
+                );
+            }
+            merged.target_info = *parsed;
+        }
+
+        if (merged.target_triple.empty()) {
+            throw CompilerException("xenon.toml: missing required field 'build.target'", common::SourceLocation{0, 0, toml_path.string()});
         }
 
         merged.project_root = *root;
