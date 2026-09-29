@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <format>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace xenon::tokens {
@@ -18,12 +19,10 @@ namespace xenon::tokens {
         LET,        // let   - variable declaration
         FUNC,       // func
         OPERATOR,   // operator - operator overload declaration
-        CLASS,      // class - class declaration
-        IMPL,       // impl - class implementation block
+        TYPE,       // type  - struct declaration (aliases: later)
+        IMPL,       // impl  - implementation block for a type
         STATIC,     // static - static member
         PUB,        // pub - public declaration
-        NEW,        // new   - heap allocation
-        DELETE,     // delete - memory free
 
         // Type qualifiers
         MUT,        // mut
@@ -56,6 +55,13 @@ namespace xenon::tokens {
         FLOAT_LITERAL,      // 3.14  6.022E23
         STRING_LITERAL,     // "hello"
         CHARACTER_LITERAL,  // 'c'
+
+        // DOCUMENTATION
+        // The lexeme holds the comment text with the marker (and one leading
+        // space) stripped. One token per source line; the parser merges
+        // consecutive lines into a single doc string.
+        DOC_COMMENT,          // /// ...  (attaches to the next declaration)
+        MODULE_DOC_COMMENT,   // //! ...  (documents the enclosing module)
 
         // OPERATORS
 
@@ -120,6 +126,7 @@ namespace xenon::tokens {
         COLON_COLON,    // ::
         DOT,            // .
         ARROW,          // ->
+        HASH,           // #    (starts an attribute: #[name(args), ...])
 
         // SPECIAL
         EOF_TOKEN,
@@ -130,12 +137,10 @@ namespace xenon::tokens {
         {"let",       TokenType::LET},
         {"func",      TokenType::FUNC},
         {"operator",  TokenType::OPERATOR},
-        {"class",     TokenType::CLASS},
+        {"type",      TokenType::TYPE},
         {"impl",      TokenType::IMPL},
         {"static",    TokenType::STATIC},
         {"pub",       TokenType::PUB},
-        {"new",       TokenType::NEW},
-        {"delete",    TokenType::DELETE},
         // Type qualifiers
         {"mut",       TokenType::MUT},
         // Control flow
@@ -166,6 +171,7 @@ namespace xenon::tokens {
         "u16",
         "u32",
         "u64",
+        "size",
     };
 
     inline const std::unordered_set<std::string> FLOATING_POINT_SUFFIXES = {
@@ -179,12 +185,10 @@ namespace xenon::tokens {
             case TokenType::LET:            return "let";
             case TokenType::FUNC:           return "func";
             case TokenType::OPERATOR:       return "operator";
-            case TokenType::CLASS:          return "class";
+            case TokenType::TYPE:           return "type";
             case TokenType::IMPL:           return "impl";
             case TokenType::STATIC:         return "static";
             case TokenType::PUB:            return "pub";
-            case TokenType::NEW:            return "new";
-            case TokenType::DELETE:         return "delete";
             case TokenType::MUT:            return "mut";
             case TokenType::IF:             return "if";
             case TokenType::ELSE:           return "else";
@@ -206,6 +210,8 @@ namespace xenon::tokens {
             case TokenType::FLOAT_LITERAL:      return "float literal";
             case TokenType::STRING_LITERAL:     return "string literal";
             case TokenType::CHARACTER_LITERAL:  return "character literal";
+            case TokenType::DOC_COMMENT:        return "doc comment";
+            case TokenType::MODULE_DOC_COMMENT: return "module doc comment";
 
             // Operators
             case TokenType::EQ:          return "=";
@@ -256,6 +262,7 @@ namespace xenon::tokens {
             case TokenType::COLON_COLON: return "::";
             case TokenType::DOT:         return ".";
             case TokenType::ARROW:       return "->";
+            case TokenType::HASH:        return "#";
 
             case TokenType::EOF_TOKEN:   return "<EOF>";
             default:                     return "<unknown>";

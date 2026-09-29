@@ -1,20 +1,17 @@
 
 # Xenon TODO
 
-## Guiding Principles
-- Expressive but predictable language design
-- Modern compiler architecture
-- Somewhat safe systems programming; unsafety is explicit and visible
-- Scientific and numerical computing
-- Explicit over implicit (self, mutability, visibility)
-- Structural literals, not constructors
-
-
-## v0.1 — DONE
+## v0.1
 - [x] Immutable and mutable bindings (`let`, `let mut`)
-- [x] Functions (`pub? func <name>(<params>)[-> <return type>]?`)
+- [x] Functions (`pub? static? func <name>(<params>)[-> <return type>]?`)
 - [x] Selection and iteration (`if`, `while`)
-- [x] Structs via `class` (soon `type`)
+- [x] Structs via `type`
+```
+type Point {
+    x: f64;
+    y: f64;
+}
+```
 - [x] Methods, static methods
 - [x] Fields, static fields
 - [x] Operators, ternary, in-place assignment
@@ -24,28 +21,36 @@
 - [x] Modules (`module main;`, `import`)
 
 
-
-## v0.2 — Generics, Iteration, Type System Expansion
+## v0.2 — Type System Expansion, Generics, Enums, Stdlib
 
 ### Type System
-- [ ] Replace `class` with `type`
-  - [ ] `type Age = u8;` (alias)
-  - [ ] `type Point { ... }` (struct)
-  - [ ] Parser disambiguation after name
-- [ ] Optional types: `type OptionalString = string?;`
-- [ ] Result types: `type ValueOrError = i32!str;`
+- [ ] Alias type:
+```
+type Age = u8;
+```
+- [ ] Option type:
+```
+type Option<T> {
+    has: bool;
+    data: T;
+}
+
+impl<T> Option<T> {
+    pub static func Some(data: T) -> Option<T> {
+        return Option<T> { has: true, data: data };
+    }
+
+    pub static func None() -> Option<T> {
+        return Option<T> { has: false, data: T {} };
+    }
+}
+```
+- [ ] Result types:
+> TBD
 - [ ] Copy-by-default semantics formalized
   - [ ] Which types are Copy? (primitives yes, structs if all fields Copy)
   - [ ] Reference types (`&T`, `&mut T`) always Copy
-#### Test case:
-  ```
-  type Age = u8; // Alias
-  type Point {
-      x: f32;
-      y: f32;
-      z: f32
-  }
-  ```
+
 
 ### Generics
 - [ ] Generic types: `type Box<T> { data: *mut T; }`
@@ -53,52 +58,49 @@
 - [ ] Generic functions: `func identity<T>(x: T) -> T`
 - [ ] Monomorphization strategy
 - [ ] Trait bounds: `func f<T: Display>(x: T)`
+- [ ] Turbofish: Parse `::<...>` in expression position
 
 ### Traits
 - [ ] `trait` declaration
-- [ ] `impl Trait for Type`
-- [ ] Default methods
-- [ ] Iterator trait
-- [ ] `Self` keyword
-  ```xenon
-  trait Iterator {
-      type Item;
-      func next(&mut Self) -> Item?;
-  }
-  ```
-- [ ] `IntoIterator` for `for` loop desugaring
-- [ ] `Cast` TBD
-- [ ] `Drop` trait for RAII or DES (Drop at End of Scope)
-    ```xenon
-    pub trait Drop {
-        func drop(self: &mut Self);
+```
+trait Seralise {
+    func serialise(&Self) -> string;
+}
+
+impl Serialise for Point {
+    func serialise(self: &Point) -> string {
+        return $"{{x: {self.x}, y: {self.y}}}";
     }
+}
+```
 
-    impl Drop for MyType {
-        func drop(self: &mut MyType) {
-            // cleanup
-        }
-    }
-    ```
+### Enums
+- [ ] Enums:
+```
+enum Colour {
+    RED,
+    BLUE,
+    GREEN
+}
+```
 
-### Turbofish
-- [ ] Parse `::<...>` in expression position
+### Stdlib
 
-### Control Flow
-- [ ] `for` loops
-  ```xenon
-  for x in collection { ... }
-  ```
-- [ ] Desugars to `IntoIterator::into_iter` + `Iterator::next`
-- [ ] `break` / `continue` (with optional labels?)
+- [ ] Handling for `module.toml`
 
-### Memory
+#### Memory
 - [ ] `Box<T>` — unique ownership, just `*mut T`
-- [ ] Decide: is `Box` with refcount actually `Rc<T>`?
 - [ ] `Box<T>::init(value: T) -> Box<T>` via compiler intrinsic
 - [ ] Deref semantics for `Box<T>` (auto-deref on field access?)
-- [ ] Drop / finalizer story (needed once `Box` exists)
 
+#### IO
+- [ ] Works both on POSIX and Windows
+
+#### Math
+- [ ] Link with -lm for C interop
+
+### Misc
+- [ ] `xec build <path to project>` 
 
 
 ## v0.3 — Error Handling, Iterators via Traits
@@ -106,35 +108,28 @@
 ### Error Handling
 - [ ] `?` propagation operator for result types
 - [ ] Early exit semantics
-- [ ] Integration with `i32!str` result types
 
-### Iterators (full)
+### Iterators
 - [ ] `map`, `filter`, `fold`, `collect` via traits
 - [ ] Lazy evaluation guarantees
 - [ ] `for` loop over ranges: `for i in 0..10 { ... }`
+- [ ] `for` loops using traits `Iterate`, `Iterator`
+  ```xenon
+  for x in collection { ... }
+  ```
 
 ### Type Aliases (deeper)
-- [ ] Generic aliases: `type Pair<T> = (T, T);` (needs tuples?)
+- [ ] Generic aliases: `type Pair<T> = [T; 2];`
 - [ ] Associated types in traits
 
 
-
-## v0.4+ — Open Questions / Future
+## v0.4+ — Open Questions / Future (Uncertain)
 
 ### Language
-- [ ] Closures / lambdas — syntax? capture rules?
-- [ ] Pattern matching (`match`)?
-- [ ] Tuples? Named tuples?
-- [ ] Enums / tagged unions? (needed for real `Optional` / `Result`?)
-- [ ] Const generics?
-- [ ] Variadics / varargs?
-- [ ] Async / await?
-
-### Memory
-- [ ] `Rc<T>`, `Arc<T>` (if not folded into `Box`)
-- [ ] `Weak<T>`
-- [ ] Slices / views
-- [ ] Arenas / allocators as first-class?
+- [ ] Lambda syntax
+- [ ] Pattern matching (`match`)
+- [ ] Enums
+- [ ] Function args
 
 ### Tooling
 - [ ] Package manager
@@ -145,7 +140,7 @@
 
 ---
 
-## Rejected Ideas (for now)
+## Rejected Ideas
 - Constructors — structural literals + `init` functions cover this
 - Inheritance — traits + composition only
 - Implicit `this` — explicit `self: &T` is better

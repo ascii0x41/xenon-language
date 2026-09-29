@@ -21,7 +21,7 @@ namespace xenon::ast {
             LITERAL_BOOL,
             LITERAL_ARRAY,
             LITERAL_NULLPTR,
-            LITERAL_CLASS,
+            LITERAL_STRUCT,
 
             // Names / Access
             NAME,
@@ -29,7 +29,7 @@ namespace xenon::ast {
             CALL_EXPR,
             INDEX_EXPR,
 
-            // Type Expressiosn
+            // Type Expressions
             NAMED_TYPE,
             POINTER_TYPE,
             REFERENCE_TYPE,
@@ -40,11 +40,6 @@ namespace xenon::ast {
             UNARY_OP_EXPR,
             ASSIGNMENT_EXPR,
             TERNARY_EXPR,
-
-            // Allocation
-            NEW_EXPR,
-            BOX_EXPR,
-            DELETE_STMT,
 
             // Statements
             BLOCK_STMT,
@@ -64,10 +59,10 @@ namespace xenon::ast {
             VARIABLE_DECL,
             FUNCTION_DECL,
             OPERATOR_OVERLOAD_DECL,
-            CLASS_FIELD_DECL,
-            CLASS_METHOD_DECL,
-            CLASS_STRUCTURE_DECL,
-            CLASS_IMPLEMENTATION_DECL,
+            STRUCT_FIELD_DECL,
+            METHOD_DECL,
+            STRUCT_DECL,
+            IMPL_DECL,
             
             // Special
             EOF_STMT,
@@ -84,14 +79,6 @@ namespace xenon::ast {
     };
 
     using StatementPtr = std::unique_ptr<Statement>;
-
-    // variable, function declarations, etc.
-    struct Declaration : public Statement {
-        explicit Declaration(NodeKind k, SourceLocation l)
-            : Statement(k, l) {}
-    };
-
-    using DeclarationPtr = std::unique_ptr<Declaration>;
 
     // L and R values, expressions, etc.
     struct Expression : public ASTNode {
@@ -166,10 +153,26 @@ namespace xenon::ast {
             : Expression(NodeKind::LITERAL_NULLPTR, std::move(l)) {}
     };
 
+    struct TypeExpression;
+    using TypeExprPtr = std::unique_ptr<TypeExpression>;
+
+    // The three array literal forms:
+    //   [i32; 4] { 4, 9, 16, 25 }   element_type + size_expr   fixed, explicit type and length
+    //   [i32]    { 4, 9, 16, 25 }   element_type only          dynamic, explicit element type
+    //            [ 4, 9, 16, 25 ]   neither                     fixed, inferred type, length = count
     struct LiteralArray : public Expression {
+        TypeExprPtr                element_type;   // nullptr => inferred
+        ExpressionPtr              size_expr;      // nullptr => dynamic (typed) or length-by-count (inferred)
         std::vector<ExpressionPtr> elements;
-        explicit LiteralArray(SourceLocation l, std::vector<ExpressionPtr> elems)
-            : Expression(NodeKind::LITERAL_ARRAY, std::move(l)), elements(std::move(elems)) {}
+
+        explicit LiteralArray(SourceLocation l, std::vector<ExpressionPtr> elems,
+                              TypeExprPtr elem_type = nullptr, ExpressionPtr size = nullptr)
+            : Expression(NodeKind::LITERAL_ARRAY, std::move(l)),
+              element_type(std::move(elem_type)), size_expr(std::move(size)),
+              elements(std::move(elems)) {}
+
+        bool is_typed()   const { return element_type != nullptr; }
+        bool is_dynamic() const { return element_type != nullptr && size_expr == nullptr; }
     };
     
 
@@ -197,6 +200,8 @@ namespace xenon::ast {
 
     struct ModuleName {
         std::vector<std::string> components;
+        SourceLocation location;
+        std::string doc;   // doc comment of an `import` ("" for other uses)
 
         ModuleName() = default;
         explicit ModuleName(std::vector<std::string> names) : components(std::move(names)) {}
@@ -255,8 +260,6 @@ namespace xenon::ast {
     }
 
 
-    struct TypeExpression;
-    using TypeExprPtr = std::unique_ptr<TypeExpression>;
 
     struct MemberAccessExpr : public Expression {
         ExpressionPtr object;
@@ -265,11 +268,24 @@ namespace xenon::ast {
             : Expression(NodeKind::MEMBER_ACCESS_EXPR, std::move(l)), object(std::move(obj)), member(std::move(mem)) {}
     };
 
-    struct LiteralClass : public Expression {
+    // One entry of a struct literal. `name` is empty for positional entries.
+    struct FieldInitializer {
+        SourceLocation location;
+        std::string    name;
+        ExpressionPtr  value;
+    };
+
+    // Type { a, b }            positional
+    // Type { x: a, y: b }      named
+    // The two styles cannot be mixed; `is_named` says which one this literal is
+    // (an empty `Type {}` is positional).
+    struct LiteralStruct : public Expression {
         TypeExprPtr type_expr;
-        std::vector<ExpressionPtr> args;
-        LiteralClass(SourceLocation l, TypeExprPtr t, std::vector<ExpressionPtr> a)
-            : Expression(NodeKind::LITERAL_CLASS, std::move(l)), type_expr(std::move(t)), args(std::move(a)) {}
+        std::vector<FieldInitializer> fields;
+        bool is_named;
+        LiteralStruct(SourceLocation l, TypeExprPtr t, std::vector<FieldInitializer> f, bool named)
+            : Expression(NodeKind::LITERAL_STRUCT, std::move(l)), type_expr(std::move(t)),
+              fields(std::move(f)), is_named(named) {}
     };
 
     struct CallExpr : public Expression {
@@ -304,19 +320,18 @@ namespace xenon::ast {
             : TypeExpression(NodeKind::NAMED_TYPE, l), name(std::move(n)) {}
     };
 
-    // Pointer type (ptr T)
+    // Pointer type (*T or *mut T)
     struct PointerTypeExpr : public TypeExpression {
         TypeExprPtr element_type;
-        bool is_mut;  // mut ptr T or ptr T
-        bool is_box;  // box T or ptr T
-        PointerTypeExpr(SourceLocation l, TypeExprPtr elem, bool mut = false, bool boxed = false)
-            : TypeExpression(NodeKind::POINTER_TYPE, l), element_type(std::move(elem)), is_mut(mut), is_box(boxed) {}
+        bool is_mut;
+        PointerTypeExpr(SourceLocation l, TypeExprPtr elem, bool mut = false)
+            : TypeExpression(NodeKind::POINTER_TYPE, l), element_type(std::move(elem)), is_mut(mut) {}
     };
 
-    // Reference type (ref T)
+    // Reference type (&T or &mut T)
     struct ReferenceTypeExpr : public TypeExpression {
         TypeExprPtr element_type;
-        bool is_mut;  // mut ref T or ref T
+        bool is_mut;
         ReferenceTypeExpr(SourceLocation l, TypeExprPtr elem, bool mut = false)
             : TypeExpression(NodeKind::REFERENCE_TYPE, l), element_type(std::move(elem)), is_mut(mut) {}
     };
@@ -334,6 +349,7 @@ namespace xenon::ast {
     // -- Operations ---------------------------------------------------------------
 
     enum class UnaryOperatorKind {
+        PLUS,             // +x
         NEGATE,           // -x
         BITWISE_NOT,      // ~x
         LOGICAL_NOT,      // !x
@@ -409,36 +425,6 @@ namespace xenon::ast {
     };
 
 
-    // -- Allocation ---------------------------------------------------------------
-
-    struct NewExpr : public Expression {
-        TypeExprPtr alloc_type;
-        ExpressionPtr alloc_expr;
-        std::vector<ExpressionPtr> initialiser_args;
-
-        NewExpr(SourceLocation l, TypeExprPtr type, std::vector<ExpressionPtr> init = {})
-            : Expression(NodeKind::NEW_EXPR, std::move(l)),
-              alloc_type(std::move(type)),
-              alloc_expr(nullptr),
-              initialiser_args(std::move(init)) {}
-
-        explicit NewExpr(SourceLocation l, ExpressionPtr expr)
-            : Expression(NodeKind::NEW_EXPR, std::move(l)),
-              alloc_type(nullptr),
-              alloc_expr(std::move(expr)),
-              initialiser_args() {}
-
-        [[nodiscard]] bool is_type_form() const { return alloc_type != nullptr; }
-        [[nodiscard]] bool is_expression_form() const { return alloc_expr != nullptr; }
-    };
-
-    struct DeleteStmt : public Statement {
-        ExpressionPtr target;
-        DeleteStmt(SourceLocation l, ExpressionPtr t)
-            : Statement(NodeKind::DELETE_STMT, std::move(l)), target(std::move(t)) {}
-    };
-
-
     // -- Statements ---------------------------------------------------------------
 
     struct BlockStmt : public Statement {
@@ -494,6 +480,25 @@ namespace xenon::ast {
 
     // -- Declarations ---------------------------------------------------------------
 
+    // An attribute: `#[name]`, `#[name(a, b)]`. Attributes are parsed generically -
+    // no attribute is known to the parser; later phases interpret `name` and `args`.
+    struct Attribute {
+        SourceLocation             location;
+        NamePtr                    name;
+        std::vector<ExpressionPtr> args;
+    };
+
+    // variable, function declarations, etc.
+    struct Declaration : public Statement {
+        std::string            doc;         // merged `///` lines, "" if undocumented
+        std::vector<Attribute> attributes;  // every `#[...]` written before the declaration
+
+        explicit Declaration(NodeKind k, SourceLocation l)
+            : Statement(k, l) {}
+    };
+
+    using DeclarationPtr = std::unique_ptr<Declaration>;
+
     struct VariableDecl : public Declaration {
         std::string name;
         TypeExprPtr type_expr;  // can be nullptr
@@ -509,8 +514,8 @@ namespace xenon::ast {
     struct FunctionDecl : public Declaration {
         std::string name;
         std::vector<VariableDeclPtr> parameters;
-        TypeExprPtr return_type;  // can be nullptr
-        BlockPtr body;          // can be nullptr (only in header)
+        TypeExprPtr return_type;  // never nullptr from the parser (defaults to `void`)
+        BlockPtr body;          // nullptr for a declaration without a body (`func f();`, e.g. extern)
         bool is_public;
         FunctionDecl(SourceLocation l, std::string n, std::vector<VariableDeclPtr> params, TypeExprPtr ret_type = nullptr, BlockPtr b = nullptr, bool p = false)
             : Declaration(NodeKind::FUNCTION_DECL, std::move(l)), name(std::move(n)), parameters(std::move(params)), return_type(std::move(ret_type)), body(std::move(b)), is_public(p) {}
@@ -520,7 +525,7 @@ namespace xenon::ast {
 
 
     struct OperatorOverloadDecl : public Declaration {
-        std::string op_lexeme;
+        std::string op_lexeme;   // "+", "==", "+=", "[]", "()", ...
         std::vector<VariableDeclPtr> parameters;
         TypeExprPtr return_type;
         BlockPtr body;
@@ -537,74 +542,75 @@ namespace xenon::ast {
 
     using OperatorOverloadDeclPtr = std::unique_ptr<OperatorOverloadDecl>;
 
-    struct ClassFieldDecl : public Declaration {
+    // A field of a `type` declaration:  [pub] name: T;
+    struct StructFieldDecl : public Declaration {
         std::string name;
         TypeExprPtr type_expr;
         bool is_public;
-        ClassFieldDecl(SourceLocation l, std::string n,
-                    TypeExprPtr t = nullptr,
-                    bool p = false)
-            : Declaration(NodeKind::CLASS_FIELD_DECL, std::move(l)),
+        StructFieldDecl(SourceLocation l, std::string n,
+                        TypeExprPtr t = nullptr,
+                        bool p = false)
+            : Declaration(NodeKind::STRUCT_FIELD_DECL, std::move(l)),
             name(std::move(n)), type_expr(std::move(t)), is_public(p) {}
     };
 
-    using ClassFieldDeclPtr = std::unique_ptr<ClassFieldDecl>;
+    using StructFieldDeclPtr = std::unique_ptr<StructFieldDecl>;
 
 
-    struct ClassMethodDecl : public Declaration {
+    // A function inside an `impl` block.
+    struct MethodDecl : public Declaration {
         std::string name;
         std::vector<VariableDeclPtr> parameters;
         TypeExprPtr return_type;
         BlockPtr body;
         bool is_public;
         bool is_static;
-        ClassMethodDecl(SourceLocation l, std::string n,
-                        std::vector<VariableDeclPtr> params,
-                        TypeExprPtr ret_type = nullptr,
-                        BlockPtr b = nullptr,
-                        bool p = false,
-                        bool s = false)
-            : Declaration(NodeKind::CLASS_METHOD_DECL, std::move(l)),
+        MethodDecl(SourceLocation l, std::string n,
+                   std::vector<VariableDeclPtr> params,
+                   TypeExprPtr ret_type = nullptr,
+                   BlockPtr b = nullptr,
+                   bool p = false,
+                   bool s = false)
+            : Declaration(NodeKind::METHOD_DECL, std::move(l)),
             name(std::move(n)), parameters(std::move(params)),
             return_type(std::move(ret_type)), body(std::move(b)),
             is_public(p), is_static(s) {}
     };
 
-    using ClassMethodDeclPtr = std::unique_ptr<ClassMethodDecl>;
+    using MethodDeclPtr = std::unique_ptr<MethodDecl>;
 
-    struct ClassStructureDecl : public Declaration {
+    // type Name { fields }
+    // (`type Name = T;` aliases will get their own node later.)
+    struct StructDecl : public Declaration {
         std::string name;
-        std::vector<ClassFieldDeclPtr> fields;
+        std::vector<StructFieldDeclPtr> fields;
         bool is_public;
-        ClassStructureDecl(SourceLocation l, std::string n,
-                        std::vector<ClassFieldDeclPtr> f,
-                        bool p = false)
-            : Declaration(NodeKind::CLASS_STRUCTURE_DECL, std::move(l)),
+        StructDecl(SourceLocation l, std::string n,
+                   std::vector<StructFieldDeclPtr> f,
+                   bool p = false)
+            : Declaration(NodeKind::STRUCT_DECL, std::move(l)),
             name(std::move(n)), fields(std::move(f)), is_public(p) {}
     };
 
-    using ClassStructureDeclPtr = std::unique_ptr<ClassStructureDecl>;
+    using StructDeclPtr = std::unique_ptr<StructDecl>;
 
-    struct ClassImplementationDecl : public Declaration {
-        NamePtr class_name;
+    // impl Name { static lets, methods, operator overloads }
+    struct ImplDecl : public Declaration {
+        NamePtr type_name;
         std::vector<VariableDeclPtr> static_vars;
-        std::vector<ClassMethodDeclPtr> methods;
+        std::vector<MethodDeclPtr> methods;
         std::vector<OperatorOverloadDeclPtr> operator_overloads;
-        std::vector<ClassMethodDeclPtr> constructors;
-        ClassMethodDeclPtr destructor;
 
-        ClassImplementationDecl(SourceLocation l, NamePtr n,
-                                std::vector<VariableDeclPtr> sv = {},
-                                std::vector<ClassMethodDeclPtr> m = {},
-                                std::vector<OperatorOverloadDeclPtr> o = {},
-                                std::vector<ClassMethodDeclPtr> c = {})
-            : Declaration(NodeKind::CLASS_IMPLEMENTATION_DECL, std::move(l)),
-            class_name(std::move(n)), static_vars(std::move(sv)),
-            methods(std::move(m)), operator_overloads(std::move(o)),
-            constructors(std::move(c)) {}
+        ImplDecl(SourceLocation l, NamePtr n,
+                 std::vector<VariableDeclPtr> sv = {},
+                 std::vector<MethodDeclPtr> m = {},
+                 std::vector<OperatorOverloadDeclPtr> o = {})
+            : Declaration(NodeKind::IMPL_DECL, std::move(l)),
+            type_name(std::move(n)), static_vars(std::move(sv)),
+            methods(std::move(m)), operator_overloads(std::move(o)) {}
     };
 
-    using ClassImplementationDeclPtr = std::unique_ptr<ClassImplementationDecl>;
+    using ImplDeclPtr = std::unique_ptr<ImplDecl>;
 
 
     struct EOFStmt : public Statement {
@@ -619,6 +625,7 @@ namespace xenon::ast {
 
 
     struct ModuleAST {
+        std::string doc;           // `//!` lines at the top of the file, plus `///` before `module`
         ModuleName module_name;
         std::vector<ModuleName> dependencies;  // names of modules this module depends on
         ASTRootElement root;

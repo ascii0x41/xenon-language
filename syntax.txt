@@ -119,13 +119,30 @@ func test_struct_literals() -> i32 {
 
     // Arrays
     let vec = [f32; 3] { 0.0, -9.8, 0.0 };
-    let mut primes  = [u64] { 2, 3, 5, 7, 11, 13 };
+    let mut primes = [u64; 6] { 2, 3, 5, 7, 11, 13 };
+
+    // `[T]` is a dynamic array type with fields, so this is an ordinary struct literal
+    let mut buf = [u8] { data, 0, 16 };
 
     return 0;
 }
 
 // ============================================================
-// 5. FUNCTIONS: Parameters, Return Types, Bodies
+// 5. STRING LITERALS
+// ============================================================
+
+func test_string_literals() -> i32 {
+
+    let a = "Linus";             // string           (default)
+    let b: [u8; 6] = "Linus";    // byte array, NUL included
+    let c: *u8 = "Linus";        // pointer to first byte, NUL-terminated
+    let d = &"Linus";            // &[u8; 6], reference to the whole array
+
+    return 0;
+}
+
+// ============================================================
+// 6. FUNCTIONS: Parameters, Return Types, Bodies
 // ============================================================
 
 // Simple function with no parameters
@@ -175,7 +192,7 @@ func explicit_void() -> void {
 }
 
 // ============================================================
-// 6. VARIABLE DECLARATIONS
+// 7. VARIABLE DECLARATIONS
 // ============================================================
 
 func variable_declarations() -> void {
@@ -222,7 +239,7 @@ func variable_declarations() -> void {
 }
 
 // ============================================================
-// 7. EXPRESSIONS
+// 8. EXPRESSIONS
 // ============================================================
 
 func expressions() -> i32 {
@@ -300,7 +317,7 @@ func expressions() -> i32 {
 }
 
 // ============================================================
-// 8. STATEMENTS
+// 9. STATEMENTS
 // ============================================================
 
 func statements() -> i32 {
@@ -326,7 +343,7 @@ func statements() -> i32 {
 
 
 // ============================================================
-// 9. ANNOTATIONS
+// 10. ANNOTATIONS
 // ============================================================
 
 #[extern("C")]
@@ -344,7 +361,7 @@ func super_complicated_code() {
 }
 
 // ============================================================
-// 10. MAIN FUNCTION
+// 11. MAIN FUNCTION
 // ============================================================
 
 func main() -> i32 {

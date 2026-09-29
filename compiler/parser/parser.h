@@ -6,6 +6,7 @@
 #include "common/diagnostics.h"
 
 #include <string>
+#include <vector>
 
 namespace xenon::parser {
 
@@ -31,6 +32,12 @@ namespace xenon::parser {
         std::string filepath_;
         size_t current_ = 0;
 
+        // While true, `Name {` is NOT parsed as a struct literal and `[T] {` is
+        // not parsed as a typed array literal. Set while parsing the condition
+        // of `if` / `while`, where the `{` opens the body. Reset to false inside
+        // (), [] and {} so `if f(Point { 1, 2 }) { ... }` still works.
+        bool no_struct_literal_ = false;
+
         inline SourceLocation loc() { return current_ < tokens_.size() ? tokens_[current_].location : tokens_.back().location; }
         inline bool is_at_end() const {
             return current_ >= tokens_.size() ||
@@ -49,10 +56,37 @@ namespace xenon::parser {
         bool accept(TokenType kind);
         Token expect(TokenType kind, const std::string& msg);
 
+        // -- Doc comments & attributes ---------------------------------------------
+        //
+        // `///` lines and `#[...]` groups written before a declaration. They are
+        // collected here first and attached once the declaration has been parsed.
+
+        struct Metadata {
+            std::string doc;
+            bool has_doc = false;
+            SourceLocation doc_location;            // first `///` line
+            std::vector<Attribute> attributes;
+            SourceLocation attribute_location;      // first `#[`
+
+            bool empty() const { return !has_doc && attributes.empty(); }
+        };
+
+        // Metadata read while looking for `module`/`import` that turned out to
+        // belong to the first real declaration.
+        Metadata pending_meta_;
+
+        Metadata parse_metadata();                              // any mix of `///` and `#[...]`
+        void parse_attribute_group(std::vector<Attribute>& out);  // one `#[a, b(1)]`
+        void check_dangling_metadata(const Metadata& meta);     // error if meta has nothing to attach to
+        static void attach_metadata(Declaration& decl, Metadata&& meta);
+
         // -- AST Construction ------------------------------------------------------
         
         NamePtr parse_name();
         TypeExprPtr parse_type_expression();
+        TypeExprPtr parse_return_type();        // `-> T`, or an implicit `void`
+        BlockPtr parse_optional_body();         // `{ ... }`, or `;` for a body-less declaration
+        std::string parse_operator_symbol();    // the symbol after `operator`
 
         std::vector<ExpressionPtr> parse_arguments();
         std::vector<VariableDeclPtr> parse_parameters();
@@ -98,10 +132,10 @@ namespace xenon::parser {
 
         // -- Primary helpers ------------------------------------------------------
 
-        ExpressionPtr parse_array_literal();
-        ExpressionPtr parse_new_expr();
-        ExpressionPtr parse_class_literal(SourceLocation l, TypeExprPtr type_expr);
-//        ExpressionPtr parse_box_expr();
+        ExpressionPtr parse_array_literal();    // [a, b]   [T] { a, b }   [T; N] { a, b }
+        ExpressionPtr parse_struct_literal(SourceLocation l, TypeExprPtr type_expr);  // T { a, b }  /  T { x: a, y: b }
+        std::vector<ExpressionPtr> parse_braced_expressions(const char* what);       // { a, b, c }
+        bool typed_array_literal_ahead() const;   // at '[': does the matching ']' come right before a '{'?
 
         // -- Statements -----------------------------------------------------------
 
@@ -117,17 +151,18 @@ namespace xenon::parser {
         FunctionDeclPtr parse_function_declaration(bool is_public = false);
         OperatorOverloadDeclPtr parse_operator_overload_declaration(bool is_public = false);
 
-        ClassFieldDeclPtr parse_class_field_declaration(bool is_public = false);
-        ClassMethodDeclPtr parse_class_method_declaration(bool is_public = false, bool is_static = false);
+        StructFieldDeclPtr parse_struct_field_declaration(bool is_public = false);
+        MethodDeclPtr parse_method_declaration(bool is_public = false, bool is_static = false);
 
-        ClassStructureDeclPtr parse_class_structure_declaration(bool is_public = false);
-        ClassImplementationDeclPtr parse_class_implementation_declaration();
+        StructDeclPtr parse_struct_declaration(bool is_public = false);
+        ImplDeclPtr parse_impl_declaration();
 
         // -- Headers --------------------------------------------------------------
 
+        std::string parse_inner_doc();  // consecutive `//!` lines at the top of the file
         ModuleName parse_module_name(); // parse the module name
-        std::vector<ModuleName> parse_dependencies(); // parse the dependencies of the module
-        
+        ModuleName parse_import();      // parse one `import a::b;`
+
         void parse_header(ModuleAST& ast); // parse the header of the module, including module name and dependencies
     };
      

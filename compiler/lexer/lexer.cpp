@@ -11,6 +11,8 @@ namespace xenon::lexer {
         try {
             while (!is_at_end()) {
                 start_ = current_;
+                start_line_ = line_;
+                start_column_ = column_;
                 scan_token();
             }
 
@@ -23,27 +25,12 @@ namespace xenon::lexer {
         }
     }
 
-    void Lexer::add_token(TokenType type, std::string lexeme) {
-        std::string view = lexeme;
-        if (view.empty()) {
-            view = std::string(source_.data() + start_, current_ - start_);
-        } else {
-            owned_lexemes_.emplace_back(view);
-            view = owned_lexemes_.back();
+    void Lexer::add_token(TokenType type, std::optional<std::string> lexeme) {
+        if (!lexeme) {
+            lexeme = std::string(source_.data() + start_, current_ - start_);
         }
-        tokens_.emplace_back(type, view, SourceLocation(line_, token_start_column(), file_));
+        tokens_.emplace_back(type, std::move(*lexeme), token_start());
     }
-
-    uint32_t Lexer::token_start_column() const {
-        uint32_t codepoints = 0;
-        for (size_t i = start_; i < current_; ++i) {
-            unsigned char b = static_cast<unsigned char>(source_[i]);
-            if (b != '\n' && !is_utf8_continuation(b))
-                ++codepoints;
-        }
-        return column_ - codepoints;
-    }
-    
 
     void Lexer::scan_token() {
         unsigned char c = advance();
@@ -59,6 +46,12 @@ namespace xenon::lexer {
             case ',': add_token(TokenType::COMMA);     break;
             case ';': add_token(TokenType::SEMICOLON); break;
             case '?': add_token(TokenType::QUESTION);  break;
+            case '#': add_token(TokenType::HASH);      break;
+
+            // -- Character literals  '…'  -------------------------------------
+            case '\'':
+                scan_char();
+                break;
 
             // -- Colon  :  ::  -----------------------------------------------
             case ':':
@@ -93,12 +86,25 @@ namespace xenon::lexer {
                 add_token(match('=') ? TokenType::PERCENT_EQ : TokenType::PERCENT);
                 break;
 
-            // -- Slash  /  /=  //  /*  --------------------------------------------
+            // -- Slash  /  /=  //  ///  //!  /*  ----------------------------------
+            //   ///  doc comment (exactly three slashes; "////" or more is a
+            //         plain comment so that "//////////" banners stay comments)
+            //   //!  module doc comment
             case '/':
-                if      (match('/')) skip_line_comment();
+                if (match('/')) {
+                    if (peek() == '!') {
+                        advance();
+                        scan_doc_comment(TokenType::MODULE_DOC_COMMENT);
+                    } else if (peek() == '/' && peek_next() != '/') {
+                        advance();
+                        scan_doc_comment(TokenType::DOC_COMMENT);
+                    } else {
+                        skip_line_comment();
+                    }
+                }
                 else if (match('*')) skip_block_comment();
-                else if (match('=')) add_token(TokenType::SLASH);
-                else                 add_token(TokenType::SLASH_EQ);
+                else if (match('=')) add_token(TokenType::SLASH_EQ);
+                else                 add_token(TokenType::SLASH);
                 break;
 
             // -- Equals  =  ==  =>  -----------------------------------------------
@@ -172,7 +178,7 @@ namespace xenon::lexer {
                     scan_identifier();
                 } else {
                     throw CompilerException(
-                        std::format("Unexpected character U+{:04X}", static_cast<unsigned>(c)), loc()
+                        std::format("Unexpected character U+{:04X}", static_cast<unsigned>(c)), token_start()
                     );
                 }
                 break;
@@ -248,6 +254,9 @@ namespace xenon::lexer {
             if (INTEGER_SUFFIXES.find(suffix) == INTEGER_SUFFIXES.end()) {
                 throw CompilerException(std::format("Unknown integer suffix '{}'", suffix), loc());
             }
+        } else {
+            // Pointer-sized integer suffix: size
+            match_word("size");
         }
 
         // Emit the appropriate token
@@ -289,6 +298,8 @@ namespace xenon::lexer {
             if (INTEGER_SUFFIXES.find(suffix) == INTEGER_SUFFIXES.end()) {
                 throw CompilerException(std::format("Unknown integer suffix '{}'", suffix), loc());
             }
+        } else {
+            match_word("size");
         }
         
         add_token(TokenType::INT_LITERAL, source_.substr(start_, current_ - start_));
@@ -318,23 +329,54 @@ namespace xenon::lexer {
     }
 
     void Lexer::scan_char() {
-        // Opening '\'' already consumed.
+        // Opening '\'' already consumed. Exactly one Unicode codepoint (or one
+        // escape sequence) is allowed between the quotes.
+        if (is_at_end() || peek() == '\n')
+            throw CompilerException("Unterminated character literal", token_start());
+        if (peek() == '\'')
+            throw CompilerException("Empty character literal", token_start());
+
         std::string value;
-        
         if (peek() == '\\') {
-            EscapeResult esc = decode_escape_sequence();
-            value += esc.value;
+            value = decode_escape_sequence().value;
         } else {
-            value += static_cast<char>(advance());
-            if (value.size() != 1)
-                throw CompilerException("Character literal must be a single character", loc());
+            value += static_cast<char>(advance());              // lead byte
+            while (is_utf8_continuation(peek()))                // rest of the codepoint
+                value += static_cast<char>(advance());
         }
-        
-        if (peek() != '\'')
-            throw CompilerException("Unterminated character literal", loc());
-        
+
+        if (peek() != '\'') {
+            if (is_at_end() || peek() == '\n')
+                throw CompilerException("Unterminated character literal", token_start());
+            throw CompilerException("Character literal must contain exactly one character", token_start());
+        }
+
         advance();  // closing '\''
-        add_token(TokenType::STRING_LITERAL, std::move(value));
+        add_token(TokenType::CHARACTER_LITERAL, std::move(value));
+    }
+
+    // Consume the rest of a `///` or `//!` line (the marker is already consumed)
+    // and emit one doc token whose lexeme is the text after the marker, minus a
+    // single leading space and any trailing '\r'.
+    void Lexer::scan_doc_comment(TokenType type) {
+        const size_t begin = current_;
+        while (peek() != '\n' && !is_at_end()) advance();
+
+        std::string text = source_.substr(begin, current_ - begin);
+        if (!text.empty() && text.back() == '\r')  text.pop_back();
+        if (!text.empty() && text.front() == ' ') text.erase(0, 1);
+        add_token(type, std::move(text));
+    }
+
+    // Consume `word` iff it appears at the cursor and is not the prefix of a
+    // longer identifier (so "42size" matches but "42sizeof" does not).
+    bool Lexer::match_word(std::string_view word) {
+        if (source_.compare(current_, word.size(), word) != 0) return false;
+        const size_t after = current_ + word.size();
+        if (after < source_.size() && is_ident_continue(static_cast<uchar>(source_[after])))
+            return false;
+        for (size_t i = 0; i < word.size(); ++i) advance();
+        return true;
     }
 
 
@@ -430,7 +472,7 @@ namespace xenon::lexer {
         }
         
         // Unknown escape sequence
-        throw CompilerException(std::format("Unknown escape sequence '\\{}'", c), loc());
+        throw CompilerException(std::format("Unknown escape sequence '\\{}'", static_cast<char>(c)), loc());
     }
 
     uchar Lexer::decode_simple_escape(uchar c) {

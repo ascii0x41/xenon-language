@@ -50,11 +50,14 @@ file(
     "${PROJECT_SOURCE_DIR}/compiler/*.cpp"
 )
 
+list(FILTER XENON_SOURCES EXCLUDE REGEX "^${PROJECT_SOURCE_DIR}/compiler/semantic/")
+
 add_executable(
     xec
     "${PROJECT_SOURCE_DIR}/compiler/main.cpp"
     ${XENON_SOURCES}
 )
+
 
 # --------------------------------------------------
 # C++ standard

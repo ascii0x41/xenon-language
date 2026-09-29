@@ -23,6 +23,8 @@ build/
 *.exe
 *.out
 *.log
+*.patch
+*.rej
 __pycache__/
 venv/
 examples/

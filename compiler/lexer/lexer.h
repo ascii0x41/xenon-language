@@ -4,7 +4,9 @@
 #include "common/dataclasses.h"
 #include "common/diagnostics.h"
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace xenon::lexer {
@@ -76,13 +78,18 @@ namespace xenon::lexer {
         std::string source_;
         std::string file_;
         TokenStream tokens_;
-        std::vector<std::string> owned_lexemes_;
 
         // -- Position -------------------------------------------------------------
         size_t start_   = 0;   // byte offset of the current token's first uchar
         size_t current_ = 0;   // byte offset of the next unread uchar
         uint32_t    line_    = 1;
         uint32_t    column_  = 1;   // Unicode codepoint column (1-based)
+
+        // Line/column of the current token's first byte, captured before the
+        // token is scanned so that tokens spanning lines (strings, comments)
+        // are still reported where they start.
+        uint32_t    start_line_   = 1;
+        uint32_t    start_column_ = 1;
 
         // -- Primitives ------------------------------------------------------------
 
@@ -122,13 +129,14 @@ namespace xenon::lexer {
 
         // -- Token emission --------------------------------------------------------
 
-        // Record a token whose column is the start of the current token.
-        // Empty lexeme means source_[start_..current_) zero-copy view.
-        // Non-empty lexeme is owned inside the lexer and exposed as string_view.
-        void add_token(TokenType type, std::string lexeme = {});
+        // Record a token located at the start of the current token.
+        // No lexeme (std::nullopt) means the raw source text
+        // source_[start_..current_). An explicit lexeme - including an empty
+        // one, e.g. the value of "" - is used as given.
+        void add_token(TokenType type, std::optional<std::string> lexeme = std::nullopt);
 
-        // Column of the first byte of the current token.
-        uint32_t token_start_column() const;
+        // Location of the first byte of the current token.
+        SourceLocation token_start() const { return SourceLocation(start_line_, start_column_, file_); }
 
         // -- Main dispatch ---------------------------------------------------------
         void scan_token();
@@ -139,6 +147,8 @@ namespace xenon::lexer {
         void scan_prefixed_number();        // 0x...  0b…  0o…
         void scan_string();                 // "..."
         void scan_char();                   // '...'
+        void scan_doc_comment(TokenType type); // /// ...  or  //! ...  (one line)
+        bool match_word(std::string_view word); // consume `word` if not followed by an identifier char
         
         // -- Escape handling -------------------------------------------------------
         struct EscapeResult {

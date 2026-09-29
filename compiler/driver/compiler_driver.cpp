@@ -1,7 +1,7 @@
 #include "driver/compiler_driver.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
-#include "semantic/analyser.h"
+// #include "semantic/analyser.h"
 #include "toml/toml_parser.h"
 
 #include <algorithm>
@@ -211,7 +211,7 @@ func main() -> i32 {
     {
         Module* node = get_module(name);
         if (!node) {
-            return true;
+            return false;
         }
 
         state[name] = 1;
@@ -227,7 +227,7 @@ func main() -> i32 {
                 if (!dep_module) {
                     report_unresolved_dependency(name, dep_name, node->path);
                     found_error = true;
-                    break;
+                    continue;
                 }
 
                 const auto dep_state = state.find(dep_name);
@@ -252,13 +252,12 @@ func main() -> i32 {
                         std::format("circular module dependency detected:\n  {}", cycle_text),
                         common::SourceLocation{0, 0, node->path.string()});
                     found_error = true;
-                    break;
+                    continue;
                 }
 
                 if (dep_state == state.end() || dep_state->second == 0) {
                     if (dfs_validate_module(dep_name, state, path, path_index)) {
                         found_error = true;
-                        break;
                     }
                 }
             }
@@ -285,13 +284,14 @@ func main() -> i32 {
             state[name] = 0;
         }
 
+        bool has_validation_errors = false;
         for (const auto& name : module_names) {
             if (state[name] == 0 && dfs_validate_module(name, state, path, path_index)) {
-                return false;
+                has_validation_errors = true;
             }
         }
 
-        return !g_diagnostics.has_errors();
+        return !has_validation_errors && !g_diagnostics.has_errors();
     }
 
     std::optional<fs::path> ModuleNamespaceTree::find_project_root(const fs::path& start) {
@@ -530,11 +530,11 @@ func main() -> i32 {
         if (g_diagnostics.has_errors()) {
             return false;
         }
-
+/*
         if (!semantic::SemanticAnalyser::validate(module_tree_, options_)) {
             return false;
         }
-
+*/
         std::cout << "Check passed — no errors.\n";
         return true;
     }
@@ -549,11 +549,11 @@ func main() -> i32 {
         if (g_diagnostics.has_errors()) {
             return false;
         }
-
+/*
         if (!semantic::SemanticAnalyser::validate(module_tree_, options_)) {
             return false;
         }
-
+*/
         verbosity_print("Phase 3: Generating code...");
         verbosity_print("  Code generation OK");
 
