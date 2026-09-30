@@ -156,13 +156,12 @@ namespace xenon::ast {
     struct TypeExpression;
     using TypeExprPtr = std::unique_ptr<TypeExpression>;
 
-    // The three array literal forms:
+    // The two array literal forms:
     //   [i32; 4] { 4, 9, 16, 25 }   element_type + size_expr   fixed, explicit type and length
-    //   [i32]    { 4, 9, 16, 25 }   element_type only          dynamic, explicit element type
     //            [ 4, 9, 16, 25 ]   neither                     fixed, inferred type, length = count
     struct LiteralArray : public Expression {
         TypeExprPtr                element_type;   // nullptr => inferred
-        ExpressionPtr              size_expr;      // nullptr => dynamic (typed) or length-by-count (inferred)
+        ExpressionPtr              size_expr;      // length-by-count (inferred)
         std::vector<ExpressionPtr> elements;
 
         explicit LiteralArray(SourceLocation l, std::vector<ExpressionPtr> elems,
@@ -172,7 +171,6 @@ namespace xenon::ast {
               elements(std::move(elems)) {}
 
         bool is_typed()   const { return element_type != nullptr; }
-        bool is_dynamic() const { return element_type != nullptr && size_expr == nullptr; }
     };
     
 
