@@ -68,7 +68,7 @@ namespace xenon::semantic {
             const ast::ExpressionPtr& init_expr, const SourceLocation& loc, const char* what);
         bool validate_variable_decl(const ast::VariableDecl* var_decl);
 
-        // Shared by validate_function/validate_class_method/validate_operator_overload:
+        // Shared by validate_function/validate_class_method:
         // enters a scope, registers the parameter list as Variables, validates
         // the body against return_type, then restores the previous scope.
         ControlFlowResult validate_callable_body(const std::string& scope_name,
@@ -87,7 +87,6 @@ namespace xenon::semantic {
         bool validate_recursive_value_layout_cycles();
         bool validate_class_static_var(Type* class_type, const ast::VariableDecl* static_var_decl);
         bool validate_class_method(Type* class_type, const ast::ClassMethodDecl* method_decl);
-        bool validate_operator_overload(Type* class_type, const ast::OperatorOverloadDecl* op_decl);
 
         // True if 'from' recursively reaches 'target' through by-value
         // fields (a direct field of a user-defined type, or the element

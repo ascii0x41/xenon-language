@@ -21,7 +21,11 @@ type Point {
 - [x] Modules (`module main;`, `import`)
 
 
-## v0.2 — Type System Expansion, Generics, Enums, Stdlib
+## v0.2 — Operator Overloading, Type System Expansion, Generics, Enums, Stdlib, and more
+
+### Operator Overloading
+
+> Note: TBD
 
 ### Type System
 - [ ] Alias type:

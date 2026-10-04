@@ -42,27 +42,6 @@ namespace xenon::parser {
             return {lexeme.substr(0, pos), lexeme.substr(pos)};
         }
 
-        bool is_overloadable_operator(TokenType t) {
-            switch (t) {
-                case TokenType::PLUS:    case TokenType::MINUS:   case TokenType::STAR:
-                case TokenType::SLASH:   case TokenType::PERCENT:
-                case TokenType::EQ_EQ:   case TokenType::BANG_EQ:
-                case TokenType::LT:      case TokenType::GT:
-                case TokenType::LTE:     case TokenType::GTE:
-                case TokenType::BANG:    case TokenType::AND:     case TokenType::OR:
-                case TokenType::AMP:     case TokenType::PIPE:    case TokenType::TILDE:
-                case TokenType::CARET:   case TokenType::LT_LT:   case TokenType::GT_GT:
-                case TokenType::PLUS_EQ: case TokenType::MINUS_EQ:
-                case TokenType::STAR_EQ: case TokenType::SLASH_EQ:
-                case TokenType::PERCENT_EQ:
-                case TokenType::AMP_EQ:  case TokenType::PIPE_EQ: case TokenType::CARET_EQ:
-                case TokenType::LT_LT_EQ: case TokenType::GT_GT_EQ:
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
     } // namespace
 
     bool Parser::match(TokenType type) {
@@ -586,8 +565,18 @@ namespace xenon::parser {
                 advance();
                 return std::make_unique<LiteralNullptr>(l);
 
-            case TokenType::LBRACKET:
+            case TokenType::LBRACKET: {
+                const size_t saved = current_;
+                auto type_expr = parse_type_expression();
+                if (check(TokenType::LBRACE) && !no_struct_literal_) {
+                    if (auto* array_type = dynamic_cast<ArrayTypeExpr*>(type_expr.get());
+                        !array_type || array_type->size_expr == nullptr) {
+                        return parse_struct_literal(l, std::move(type_expr));
+                    }
+                }
+                current_ = saved;
                 return parse_array_literal();
+            }
 
             case TokenType::COLON_COLON:
             case TokenType::IDENTIFIER: {
@@ -618,6 +607,7 @@ namespace xenon::parser {
     // separates `[T; N] { ... }` / `[T] { ... }` from a plain `[a, b, c]`.
     bool Parser::typed_array_literal_ahead() const {
         size_t depth = 0;
+        bool saw_size_separator = false;
         for (size_t i = current_; i < tokens_.size(); ++i) {
             switch (tokens_[i].type) {
                 case TokenType::LBRACKET:
@@ -625,7 +615,14 @@ namespace xenon::parser {
                     break;
                 case TokenType::RBRACKET:
                     if (--depth == 0) {
-                        return i + 1 < tokens_.size() && tokens_[i + 1].type == TokenType::LBRACE;
+                        return saw_size_separator &&
+                               i + 1 < tokens_.size() &&
+                               tokens_[i + 1].type == TokenType::LBRACE;
+                    }
+                    break;
+                case TokenType::SEMICOLON:
+                    if (depth > 0) {
+                        saw_size_separator = true;
                     }
                     break;
                 case TokenType::EOF_TOKEN:
@@ -899,41 +896,6 @@ namespace xenon::parser {
         return std::make_unique<FunctionDecl>(l, std::move(name), std::move(params), std::move(return_type), std::move(body), is_public);
     }
 
-    // The symbol after `operator`: a single overloadable operator token, or `[]` / `()`.
-    std::string Parser::parse_operator_symbol() {
-        if (check(TokenType::LBRACKET)) {
-            advance();
-            expect(TokenType::RBRACKET, "Expected ']' in 'operator[]'");
-            return "[]";
-        }
-        if (check(TokenType::LPAREN) && peek_next().type == TokenType::RPAREN) {
-            advance();
-            advance();
-            return "()";
-        }
-        if (is_overloadable_operator(peek().type)) {
-            return advance().lexeme;
-        }
-        throw CompilerException(
-            std::format("Expected an overloadable operator after 'operator', got {}", describe_token(peek())),
-            peek().location, Severity::ERROR);
-    }
-
-    // operator<op>(params...) -> ret_t { ... }
-    OperatorOverloadDeclPtr Parser::parse_operator_overload_declaration(bool is_public) {
-        SourceLocation l = loc();
-        expect(TokenType::OPERATOR, "Expected 'operator' keyword");
-        std::string op_lexeme = parse_operator_symbol();
-        auto params = parse_parameters();
-        if (params.size() == 0) throw CompilerException("Too little arguments in operator overload", l, Severity::ERROR);
-        if (params.size() > 2) throw CompilerException("Too many arguments in operator overload", l, Severity::ERROR);
-
-        auto return_type = parse_return_type();
-        auto body = parse_optional_body();
-
-        return std::make_unique<OperatorOverloadDecl>(l, std::move(op_lexeme), std::move(params), std::move(return_type), std::move(body), is_public);
-    }
-
     // <name>: <type_expr>;
     StructFieldDeclPtr Parser::parse_struct_field_declaration(bool is_public) {
         SourceLocation l = loc();
@@ -997,7 +959,6 @@ namespace xenon::parser {
 
         std::vector<VariableDeclPtr> static_vars;
         std::vector<MethodDeclPtr> methods;
-        std::vector<OperatorOverloadDeclPtr> operator_overloads;
 
         while (!check(TokenType::RBRACE) && !is_at_end()) {
             Metadata meta = parse_metadata();
@@ -1007,14 +968,6 @@ namespace xenon::parser {
             }
 
             bool member_public = match(TokenType::PUB);
-
-            if (check(TokenType::OPERATOR)) {
-                auto op = parse_operator_overload_declaration(member_public);
-                attach_metadata(*op, std::move(meta));
-                operator_overloads.push_back(std::move(op));
-                continue;
-            }
-
             bool is_static = match(TokenType::STATIC);
 
             if (check(TokenType::LET)) {
@@ -1041,8 +994,7 @@ namespace xenon::parser {
 
         expect(TokenType::RBRACE, "Expected '}' to close impl block");
         return std::make_unique<ImplDecl>(
-            l, std::move(type_name), std::move(static_vars), std::move(methods),
-            std::move(operator_overloads));
+            l, std::move(type_name), std::move(static_vars), std::move(methods));
     }
 
 

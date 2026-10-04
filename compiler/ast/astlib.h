@@ -58,7 +58,6 @@ namespace xenon::ast {
             // Declarations
             VARIABLE_DECL,
             FUNCTION_DECL,
-            OPERATOR_OVERLOAD_DECL,
             STRUCT_FIELD_DECL,
             METHOD_DECL,
             STRUCT_DECL,
@@ -522,24 +521,6 @@ namespace xenon::ast {
     using FunctionDeclPtr = std::unique_ptr<FunctionDecl>;
 
 
-    struct OperatorOverloadDecl : public Declaration {
-        std::string op_lexeme;   // "+", "==", "+=", "[]", "()", ...
-        std::vector<VariableDeclPtr> parameters;
-        TypeExprPtr return_type;
-        BlockPtr body;
-        bool is_public;
-        OperatorOverloadDecl(SourceLocation l, std::string oplex,
-                            std::vector<VariableDeclPtr> params,
-                            TypeExprPtr ret_type = nullptr,
-                            BlockPtr b = nullptr,
-                            bool p = false)
-            : Declaration(NodeKind::OPERATOR_OVERLOAD_DECL, std::move(l)),
-            op_lexeme(std::move(oplex)), parameters(std::move(params)),
-            return_type(std::move(ret_type)), body(std::move(b)), is_public(p) {}
-    };
-
-    using OperatorOverloadDeclPtr = std::unique_ptr<OperatorOverloadDecl>;
-
     // A field of a `type` declaration:  [pub] name: T;
     struct StructFieldDecl : public Declaration {
         std::string name;
@@ -592,20 +573,18 @@ namespace xenon::ast {
 
     using StructDeclPtr = std::unique_ptr<StructDecl>;
 
-    // impl Name { static lets, methods, operator overloads }
+    // impl Name { static lets, methods }
     struct ImplDecl : public Declaration {
         NamePtr type_name;
         std::vector<VariableDeclPtr> static_vars;
         std::vector<MethodDeclPtr> methods;
-        std::vector<OperatorOverloadDeclPtr> operator_overloads;
 
         ImplDecl(SourceLocation l, NamePtr n,
                  std::vector<VariableDeclPtr> sv = {},
-                 std::vector<MethodDeclPtr> m = {},
-                 std::vector<OperatorOverloadDeclPtr> o = {})
+                 std::vector<MethodDeclPtr> m = {})
             : Declaration(NodeKind::IMPL_DECL, std::move(l)),
             type_name(std::move(n)), static_vars(std::move(sv)),
-            methods(std::move(m)), operator_overloads(std::move(o)) {}
+            methods(std::move(m)) {}
     };
 
     using ImplDeclPtr = std::unique_ptr<ImplDecl>;

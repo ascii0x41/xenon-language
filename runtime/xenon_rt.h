@@ -84,11 +84,9 @@ XENON_ABI XENON_CPLX128 xenon_cplx128_polar(XENON_F64 magnitude, XENON_F64 angle
 
 XENON_ABI XENON_STRING xenon_init_string(const XENON_U8* bytes, XENON_SIZE length);
 XENON_ABI XENON_STRING xenon_string_from_cstr(const char* str); // String creation from C string (convenience for codegen)
-XENON_ABI XENON_STRING xenon_string_add(XENON_STRING a, XENON_STRING b);
-XENON_ABI XENON_STRING xenon_string_mul(XENON_STRING a, XENON_SIZE times);
 XENON_ABI XENON_BOOL xenon_string_eq(XENON_STRING a, XENON_STRING b);
 XENON_ABI XENON_BOOL xenon_string_neq(XENON_STRING a, XENON_STRING b);
-XENON_ABI void xenon_string_drop(XENON_STRING* str);
+
 
 // ============================================================================
 // Runtime Utilities

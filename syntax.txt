@@ -44,38 +44,6 @@ impl Point {
         self.y += dy;
     }
 
-    // Operator overload: binary +
-    pub operator+(self: &Point, other: &Point) -> Point {
-        return Point { x: self.x + other.x, y: self.y + other.y };
-    }
-
-    // Operator overload: binary -
-    pub operator-(self: &Point, other: &Point) -> Point {
-        return Point { x: self.x - other.x, y: self.y - other.y };
-    }
-
-    // Operator overload: unary -
-    pub operator-(self: &Point) -> Point {
-        return Point { x: -self.x, y: -self.y };
-    }
-
-    // Operator overload: +=
-    pub operator+=(self: &mut Point, other: &Point) -> &mut Point {
-        self.x += other.x;
-        self.y += other.y;
-        return self;
-    }
-
-    // Operator overload: ==
-    pub operator==(self: &Point, other: &Point) -> bool {
-        return self.x == other.x && self.y == other.y;
-    }
-
-    // Operator overload: !=
-    pub operator!=(self: &Point, other: &Point) -> bool {
-        return !(self == other);
-    }
-
     // Destructor
     pub func drop(self: &Point) {
         // cleanup
@@ -133,10 +101,9 @@ func test_struct_literals() -> i32 {
 
 func test_string_literals() -> i32 {
 
-    let a = "Linus";             // string           (default)
-    let b: [u8; 6] = "Linus";    // byte array, NUL included
-    let c: *u8 = "Linus";        // pointer to first byte, NUL-terminated
-    let d = &"Linus";            // &[u8; 6], reference to the whole array
+    let a = "Linus";             // str           (default)
+    let c: *u8 = "Linus";        // pointer to first byte
+    let d = &"Linus";            // &[u8; 5], reference to the whole array
 
     return 0;
 }

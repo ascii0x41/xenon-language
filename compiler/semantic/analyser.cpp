@@ -136,38 +136,6 @@ namespace xenon::semantic {
             }
         }
 
-        // Maps an OperatorOverloadDecl's lexeme + real operand count
-        // (excluding 'self') onto the overloadable OperatorKind it
-        // implements. Some lexemes are ambiguous without the arity ('-' is
-        // both NEGATE and SUBTRACT), which is exactly why arity is part of
-        // the lookup. Compound-assignment lexemes ("+=" etc.) aren't
-        // supported here - see the accompanying notes.
-        std::optional<OperatorKind> operator_kind_from_lexeme(const std::string& lexeme, size_t operand_count) {
-            if (operand_count == 1) {
-                if (lexeme == "+")  return OperatorKind::ADD;
-                if (lexeme == "-")  return OperatorKind::SUB;
-                if (lexeme == "*")  return OperatorKind::MUL;
-                if (lexeme == "/")  return OperatorKind::DIV;
-                if (lexeme == "%")  return OperatorKind::MOD;
-                if (lexeme == "==") return OperatorKind::EQ;
-                if (lexeme == "!=") return OperatorKind::NEQ;
-                if (lexeme == "<")  return OperatorKind::LT;
-                if (lexeme == "<=") return OperatorKind::LTE;
-                if (lexeme == ">")  return OperatorKind::GT;
-                if (lexeme == ">=") return OperatorKind::GTE;
-                if (lexeme == "&")  return OperatorKind::BADD;
-                if (lexeme == "|")  return OperatorKind::BOR;
-                if (lexeme == "^")  return OperatorKind::BXOR;
-                if (lexeme == "<<") return OperatorKind::BSHFTL;
-                if (lexeme == ">>") return OperatorKind::BSHFTR;
-                if (lexeme == "[]") return OperatorKind::IDX;
-            } else if (operand_count == 0) {
-                if (lexeme == "-") return OperatorKind::NEG;
-                if (lexeme == "~") return OperatorKind::BNOT;
-            }
-            return std::nullopt;
-        }
-
         // For the receiver ('self') parameter specifically, "mutable" means
         // "&mut T" access was declared, not whether the 'self' binding
         // itself could be reassigned (VariableDecl::is_mut) - those are
@@ -178,10 +146,10 @@ namespace xenon::semantic {
                 && static_cast<ReferenceType*>(self_type)->is_mutable;
         }
 
-        // Shared by validate_class_method/validate_operator_overload: an
-        // exact (no-conversion) parameter-type match against an existing
-        // overload counts as a duplicate/conflicting declaration; anything
-        // else is a legitimately different overload.
+        // Shared by validate_class_method: an exact (no-conversion)
+        // parameter-type match against an existing overload counts as a
+        // duplicate/conflicting declaration; anything else is a legitimately
+        // different overload.
         template <typename Overload>
         bool has_matching_signature(const std::vector<Overload>& overloads, const std::vector<Parameter>& params) {
             for (const auto& existing : overloads) {
@@ -1998,105 +1966,6 @@ namespace xenon::semantic {
         return true;
     }
 
-    bool SemanticAnalyser::validate_operator_overload(Type* class_type, const ast::OperatorOverloadDecl* op_decl) {
-        Type* return_type = resolve_type_expression(op_decl->return_type);
-        if (return_type == nullptr) {
-            return_type = type_registry_.get_void_type();
-        }
-
-        bool parameters_ok = true;
-        std::vector<Parameter> semantic_parameters;
-        semantic_parameters.reserve(op_decl->parameters.size());
-
-        for (size_t i = 0; i < op_decl->parameters.size(); ++i) {
-            const auto& param_decl = op_decl->parameters[i];
-            Type* param_type = resolve_type_expression(param_decl->type_expr);
-
-            if (param_type == nullptr || param_type->kind == TypeKind::ERROR) {
-                parameters_ok = false;
-            }
-
-            if (i == 0) {
-                bool is_valid_self = param_decl->name == "self"
-                    && param_type != nullptr
-                    && param_type->kind == TypeKind::REFERENCE
-                    && static_cast<ReferenceType*>(param_type)->referent_type == class_type;
-
-                if (!is_valid_self) {
-                    error(
-                        std::format("Operator overload for '{}' must take 'self: &{}' or 'self: &mut {}' as its first parameter",
-                            op_decl->op_lexeme, class_type->name, class_type->name),
-                        param_decl->location
-                    );
-                    parameters_ok = false;
-                }
-            }
-
-            bool is_mutable = (i == 0) ? self_parameter_is_mutable(param_type) : param_decl->is_mut;
-            semantic_parameters.emplace_back(param_decl->name, param_type, is_mutable);
-        }
-
-        if (op_decl->parameters.empty()) {
-            error(
-                std::format("Operator overload for '{}' must take 'self' as its first parameter", op_decl->op_lexeme),
-                op_decl->location
-            );
-            parameters_ok = false;
-        }
-
-        if (!parameters_ok) {
-            return false;
-        }
-
-        size_t operand_count = semantic_parameters.size() - 1;
-        std::optional<OperatorKind> operator_kind = operator_kind_from_lexeme(op_decl->op_lexeme, operand_count);
-        if (!operator_kind) {
-            error(
-                std::format("'{}' is not a valid overloadable operator for {} operand(s)", op_decl->op_lexeme, operand_count),
-                op_decl->location
-            );
-            return false;
-        }
-
-        ControlFlowResult result = ControlFlowResult::FALLS_THROUGH;
-        if (op_decl->body) {
-            result = validate_callable_body(
-                std::format("operator{} {}@{}:{}", op_decl->op_lexeme, class_type->name,
-                    op_decl->location.line, op_decl->location.column),
-                op_decl->parameters,
-                return_type,
-                op_decl->body.get(),
-                parameters_ok
-            );
-        }
-
-        if (!parameters_ok || return_type->kind == TypeKind::ERROR) {
-            return false;
-        }
-
-        if (op_decl->body && return_type->kind != TypeKind::VOID && result != ControlFlowResult::RETURNS) {
-            error(
-                std::format("Operator overload for '{}' does not return a value of type '{}' on every control-flow path",
-                    op_decl->op_lexeme, return_type->name),
-                op_decl->location
-            );
-            return false;
-        }
-
-        std::vector<Operator>& overloads = class_type->operators[*operator_kind];
-        if (has_matching_signature(overloads, semantic_parameters)) {
-            error(
-                std::format("Operator '{}' is already declared with this parameter signature in class '{}'",
-                    op_decl->op_lexeme, class_type->name),
-                op_decl->location
-            );
-            return false;
-        }
-
-        overloads.emplace_back(*operator_kind, std::move(semantic_parameters), return_type);
-        return true;
-    }
-
     bool SemanticAnalyser::validate_class_implementation(const ast::ClassImplementationDecl& impl_decl) {
         std::vector<std::string> parts;
         for (const ast::Name* part = impl_decl.class_name.get(); part != nullptr; part = part->next.get())
@@ -2127,12 +1996,6 @@ namespace xenon::semantic {
 
         for (const auto& method : impl_decl.methods) {
             if (!validate_class_method(class_type, method.get())) {
-                ok = false;
-            }
-        }
-
-        for (const auto& op_overload : impl_decl.operator_overloads) {
-            if (!validate_operator_overload(class_type, op_overload.get())) {
                 ok = false;
             }
         }

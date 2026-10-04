@@ -18,7 +18,6 @@ namespace xenon::tokens {
         // Declarations
         LET,        // let   - variable declaration
         FUNC,       // func
-        OPERATOR,   // operator - operator overload declaration
         TYPE,       // type  - struct declaration (aliases: later)
         IMPL,       // impl  - implementation block for a type
         STATIC,     // static - static member
@@ -136,7 +135,6 @@ namespace xenon::tokens {
         // Declarations
         {"let",       TokenType::LET},
         {"func",      TokenType::FUNC},
-        {"operator",  TokenType::OPERATOR},
         {"type",      TokenType::TYPE},
         {"impl",      TokenType::IMPL},
         {"static",    TokenType::STATIC},
@@ -184,7 +182,6 @@ namespace xenon::tokens {
             // Keywords
             case TokenType::LET:            return "let";
             case TokenType::FUNC:           return "func";
-            case TokenType::OPERATOR:       return "operator";
             case TokenType::TYPE:           return "type";
             case TokenType::IMPL:           return "impl";
             case TokenType::STATIC:         return "static";

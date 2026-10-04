@@ -86,8 +86,6 @@ namespace xenon::parser {
         TypeExprPtr parse_type_expression();
         TypeExprPtr parse_return_type();        // `-> T`, or an implicit `void`
         BlockPtr parse_optional_body();         // `{ ... }`, or `;` for a body-less declaration
-        std::string parse_operator_symbol();    // the symbol after `operator`
-
         std::vector<ExpressionPtr> parse_arguments();
         std::vector<VariableDeclPtr> parse_parameters();
 
@@ -149,8 +147,6 @@ namespace xenon::parser {
 
         VariableDeclPtr parse_variable_declaration(bool is_public = false);
         FunctionDeclPtr parse_function_declaration(bool is_public = false);
-        OperatorOverloadDeclPtr parse_operator_overload_declaration(bool is_public = false);
-
         StructFieldDeclPtr parse_struct_field_declaration(bool is_public = false);
         MethodDeclPtr parse_method_declaration(bool is_public = false, bool is_static = false);
 
