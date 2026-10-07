@@ -31,7 +31,7 @@
         return a / b;
 */
 #[extern("C"), link_name("xenon_panic"), noreturn]
-pub func panic(message: string);
+pub func panic(message: str);
 
 /*
     If `condition` is false, calls `panic(message)`. Otherwise
@@ -40,7 +40,7 @@ pub func panic(message: string);
     checks once `Result`/`Option` are available.
 */
 #[extern("C"), link_name("xenon_assert")]
-pub func assert(condition: bool, message: string);
+pub func assert(condition: bool, message: str);
 
 /*
     Terminate the process with the given exit code. Never returns.
@@ -66,4 +66,4 @@ pub func exit(code: i32);
     you need platform-native line endings, append them yourself.
 */
 #[extern("C"), link_name("xenon_println")]
-pub func println(s: string);
+pub func println(s: str);

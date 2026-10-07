@@ -6,90 +6,11 @@
 #include <stdio.h>
 
 // ============================================================================
-// Complex Number Operations
-// ============================================================================
-
-XENON_ABI XENON_CPLX128 xenon_init_complex(XENON_F64 real, XENON_F64 imag) {
-    XENON_CPLX128 result = { real, imag };
-    return result;
-}
-
-XENON_ABI XENON_CPLX128 xenon_cplx128_add(XENON_CPLX128 a, XENON_CPLX128 b) {
-    XENON_CPLX128 result = { a.real + b.real, a.imag + b.imag };
-    return result;
-}
-
-XENON_ABI XENON_CPLX128 xenon_cplx128_sub(XENON_CPLX128 a, XENON_CPLX128 b) {
-    XENON_CPLX128 result = { a.real - b.real, a.imag - b.imag };
-    return result;
-}
-
-XENON_ABI XENON_CPLX128 xenon_cplx128_mul(XENON_CPLX128 a, XENON_CPLX128 b) {
-    XENON_CPLX128 result;
-    result.real = a.real * b.real - a.imag * b.imag;
-    result.imag = a.real * b.imag + a.imag * b.real;
-    return result;
-}
-
-XENON_ABI XENON_CPLX128 xenon_cplx128_div(XENON_CPLX128 a, XENON_CPLX128 b) {
-    XENON_F64 denominator = b.real * b.real + b.imag * b.imag;
-    XENON_CPLX128 result;
-    result.real = (a.real * b.real + a.imag * b.imag) / denominator;
-    result.imag = (a.imag * b.real - a.real * b.imag) / denominator;
-    return result;
-}
-
-XENON_ABI void xenon_cplx128_iadd(XENON_CPLX128* a, XENON_CPLX128 b) {
-    a->real += b.real;
-    a->imag += b.imag;
-}
-
-XENON_ABI void xenon_cplx128_isub(XENON_CPLX128* a, XENON_CPLX128 b) {
-    a->real -= b.real;
-    a->imag -= b.imag;
-}
-
-XENON_ABI void xenon_cplx128_imul(XENON_CPLX128* a, XENON_CPLX128 b) {
-    XENON_F64 old_real = a->real;
-    a->real = a->real * b.real - a->imag * b.imag;
-    a->imag = old_real * b.imag + a->imag * b.real;
-}
-
-XENON_ABI void xenon_cplx128_idiv(XENON_CPLX128* a, XENON_CPLX128 b) {
-    XENON_F64 denominator = b.real * b.real + b.imag * b.imag;
-    XENON_F64 old_real = a->real;
-    a->real = (a->real * b.real + a->imag * b.imag) / denominator;
-    a->imag = (a->imag * b.real - old_real * b.imag) / denominator;
-}
-
-XENON_ABI XENON_BOOL xenon_cplx128_eq(XENON_CPLX128 a, XENON_CPLX128 b) {
-    return a.real == b.real && a.imag == b.imag;
-}
-
-XENON_ABI XENON_BOOL xenon_cplx128_neq(XENON_CPLX128 a, XENON_CPLX128 b) {
-    return !(a.real == b.real && a.imag == b.imag);
-}
-
-XENON_ABI XENON_F64 xenon_cplx128_abs(XENON_CPLX128 c) {
-    return sqrt(c.real * c.real + c.imag * c.imag);
-}
-
-XENON_ABI XENON_CPLX128 xenon_cplx128_conj(XENON_CPLX128 c) {
-    XENON_CPLX128 result = { c.real, -c.imag };
-    return result;
-}
-
-XENON_ABI XENON_CPLX128 xenon_cplx128_polar(XENON_F64 magnitude, XENON_F64 angle) {
-    XENON_CPLX128 result = { magnitude * cos(angle), magnitude * sin(angle) };
-    return result;
-}
-
-// ============================================================================
 // String Operations
 // ============================================================================
 
-XENON_ABI XENON_STRING xenon_init_string(const XENON_U8* bytes, XENON_SIZE length) {
-    XENON_STRING result;
+XENON_ABI XENON_STR xenon_init_string(const XENON_U8* bytes, XENON_SIZE length) {
+    XENON_STR result;
     XENON_U8* new_bytes = (XENON_U8*)malloc(length > 0 ? length : 1);
     if (length > 0 && bytes) {
         memcpy(new_bytes, bytes, length);
@@ -99,13 +20,13 @@ XENON_ABI XENON_STRING xenon_init_string(const XENON_U8* bytes, XENON_SIZE lengt
     return result;
 }
 
-XENON_ABI XENON_STRING xenon_string_from_cstr(const char* str) {
+XENON_ABI XENON_STR xenon_string_from_cstr(const char* str) {
     return xenon_init_string((const XENON_U8*)str, strlen(str));
 }
 
 
-XENON_ABI XENON_STRING xenon_string_add(XENON_STRING a, XENON_STRING b) {
-    XENON_STRING result;
+XENON_ABI XENON_STR xenon_string_add(XENON_STR a, XENON_STR b) {
+    XENON_STR result;
     result.length = a.length + b.length;
     XENON_U8* new_bytes = (XENON_U8*)malloc(result.length > 0 ? result.length : 1);
     
@@ -116,8 +37,8 @@ XENON_ABI XENON_STRING xenon_string_add(XENON_STRING a, XENON_STRING b) {
     return result;
 }
 
-XENON_ABI XENON_STRING xenon_string_mul(XENON_STRING a, XENON_SIZE times) {
-    XENON_STRING result;
+XENON_ABI XENON_STR xenon_string_mul(XENON_STR a, XENON_SIZE times) {
+    XENON_STR result;
     result.length = a.length * times;
     
     // Handle zero-length edge case
@@ -133,16 +54,16 @@ XENON_ABI XENON_STRING xenon_string_mul(XENON_STRING a, XENON_SIZE times) {
     return result;
 }
 
-XENON_ABI XENON_BOOL xenon_string_eq(XENON_STRING a, XENON_STRING b) {
+XENON_ABI XENON_BOOL xenon_string_eq(XENON_STR a, XENON_STR b) {
     if (a.length != b.length) return false;
     return memcmp(a.bytes, b.bytes, a.length) == 0;
 }
 
-XENON_ABI XENON_BOOL xenon_string_neq(XENON_STRING a, XENON_STRING b) {
+XENON_ABI XENON_BOOL xenon_string_neq(XENON_STR a, XENON_STR b) {
     return !xenon_string_eq(a, b);
 }
 
-XENON_ABI void xenon_string_drop(XENON_STRING* str) {
+XENON_ABI void xenon_string_drop(XENON_STR* str) {
     if (str && str->bytes) {
         free((void*)str->bytes);
         str->bytes = NULL;
@@ -159,7 +80,7 @@ XENON_ABI void xenon_move(void** dest, void** src) {
     *src = NULL;
 }
 
-XENON_ABI XENON_NOTHROW void xenon_panic(XENON_STRING message) {
+XENON_ABI XENON_NOTHROW void xenon_panic(XENON_STR message) {
     fprintf(stderr, "\n--- XENON RUNTIME PANIC ---\n");
     fprintf(stderr, "The application encountered an unrecoverable error and aborted.\n\n");
     fprintf(stderr, "Reason: ");
@@ -175,7 +96,7 @@ XENON_ABI XENON_NOTHROW void xenon_panic(XENON_STRING message) {
     exit(101);
 }
 
-XENON_ABI XENON_NOTHROW void xenon_assert(XENON_BOOL condition, XENON_STRING message) {
+XENON_ABI XENON_NOTHROW void xenon_assert(XENON_BOOL condition, XENON_STR message) {
     if (!condition) {
         xenon_panic(message);
     }
@@ -185,7 +106,7 @@ XENON_ABI XENON_NOTHROW void xenon_exit(XENON_I32 code) {
     exit(code);
 }
 
-XENON_ABI XENON_NOTHROW void xenon_println(XENON_STRING str) {
+XENON_ABI XENON_NOTHROW void xenon_println(XENON_STR str) {
     if (str.bytes && str.length > 0) {
         fwrite(str.bytes, 1, str.length, stdout);
     } else {
@@ -210,7 +131,7 @@ XENON_ABI void xenon_register_atexit(void (*func)(void)) {
 }
 
 // The actual entry point
-XENON_ABI int main(int argc, char** argv) {
+XENON_ABI int main(void) {
     xenon_program_main();
     return 0;
 }

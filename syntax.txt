@@ -1,17 +1,22 @@
 // ============================================================
 // Xenon Parser Test: Full Syntax Coverage
 // This file should parse successfully.
+//
+// This is a PARSE-ONLY test. It checks that the grammar accepts these
+// forms, not that every example passes semantic analysis. Some
+// examples below are deliberately semantically invalid (marked "sema:")
+// and exist only to exercise the parser.
 // ============================================================
 
 // ============================================================
-// 1. IMPORTS
+// 1. MODULE DECLARATION AND IMPORTS
 // ============================================================
+
+module main;
 
 import io;
 import math;
 import utils::helpers;
-
-module main;
 
 // ============================================================
 // 2. STRUCTS (Declaration + Implementation)
@@ -24,7 +29,7 @@ type Point {
 
 impl Point {
     // Static constructor
-    pub static func Point(x: i32, y: i32) -> Point {
+    pub static func init(x: i32, y: i32) -> Point {
         return Point { x, y };
     }
 
@@ -33,20 +38,26 @@ impl Point {
         return Point { 0, 0 };
     }
 
-    // Immutable method
-    pub func magnitude(self: &Point) -> f64 {
+    // Immutable-reference method
+    pub func magnitude(&self) -> f64 {
         return math::sqrt((self.x * self.x + self.y * self.y));
     }
 
-    // Mutable method
-    pub func translate(self: &mut Point, dx: i32, dy: i32) {
+    // Mutable-reference method
+    pub func translate(&mut self, dx: i32, dy: i32) {
         self.x += dx;
         self.y += dy;
     }
 
-    // Destructor
-    pub func drop(self: &Point) {
-        // cleanup
+    // By-value method
+    pub func get_x(self) -> i32 {
+        return self.x;
+    }
+
+    // Method with additional reference parameter
+    pub func transpose(&mut self, other: &Point) {
+        self.x += other.x;
+        self.y += other.y;
     }
 }
 
@@ -66,44 +77,47 @@ impl Counter {
         return Counter { 0 };
     }
 
-    pub func increment(self: &mut Counter) {
+    pub func increment(&mut self) {
         self.count += 1;
         Counter::total += 1;
     }
 }
 
 // ============================================================
-// 4. STRUCT LITERALS
+// 4. STRUCT AND SCALAR LITERALS
 // ============================================================
 
 func test_struct_literals() -> i32 {
 
+    // Named fields
+    let a = Point { x: 1, y: 2 };
+
+    // Positional fields
+    let b = Point { 1, 2 };
+
     // Scalar types
-    let a = size { 42 };
-    let b = bool { false };
+    let c = usize { 42 };
+    let d = bool { false };
 
-    // Non-scalar types
-    let c = cplx128 { 3, -4 };
-
-    // Arrays
+    // Arrays: list form and typed form
+    let list = [1, 2, 3];
     let vec = [f32; 3] { 0.0, -9.8, 0.0 };
     let mut primes = [u64; 6] { 2, 3, 5, 7, 11, 13 };
-
-    // `[T]` is a dynamic array type with fields, so this is an ordinary struct literal
-    let mut buf = [u8] { data, 0, 16 };
 
     return 0;
 }
 
 // ============================================================
-// 5. STRING LITERALS
+// 5. STRING AND RUNE LITERALS
 // ============================================================
 
 func test_string_literals() -> i32 {
 
-    let a = "Linus";             // str           (default)
-    let c: *u8 = "Linus";        // pointer to first byte
-    let d = &"Linus";            // &[u8; 5], reference to the whole array
+    let a = "Linus";             // str
+    let b: str = "Linus";        // str
+    let c = r"raw \string";      // str, raw
+    let ch = 'a';                // rune
+    let esc = '\n';              // rune
 
     return 0;
 }
@@ -122,8 +136,13 @@ func add(a: i32, b: i32) -> i32 {
     return a + b;
 }
 
+// Overload: same name, different parameter types
+func add(a: f64, b: f64) -> f64 {
+    return a + b;
+}
+
 // Function with mutable parameters
-func add(mut a: i32, mut b: i32) -> i32 {
+func add_mut(mut a: i32, mut b: i32) -> i32 {
     a += 2;
     return a + b;
 }
@@ -175,21 +194,25 @@ func variable_declarations() -> void {
     // Mutable with inference
     let mut d = 10;
 
+    // Uninitialised, type given
+    let u: i32;
+
     // Multiple declarations
     let e: i32 = 1;
     let f: i32 = 2;
     let g: i32 = 3;
 
-    // Pointer types
-    let p: *i32 = &a;
-    let mp: *mut i32 = &b;
-
     // Reference types
     let r: &i32 = &a;
-    let mr: &mut i32 = &b;
+    let mr: &mut i32 = &mut b;
+
+    // Pointer types
+    let p: *i32 = &raw a;
+    let mp: *mut i32 = &raw mut b;
+    let np: *i32 = nullptr;
 
     // String
-    let s: string = "hello";
+    let s: str = "hello";
 
     // Float
     let f32_val: f32 = 3.14;
@@ -198,11 +221,11 @@ func variable_declarations() -> void {
     // Bool
     let flag: bool = true;
 
-    // Char
-    let ch: char = 'a';
+    // Rune
+    let ch: rune = 'a';
 
     // Size
-    let sz: size = 42;
+    let sz: usize = 42;
 }
 
 // ============================================================
@@ -255,7 +278,7 @@ func expressions() -> i32 {
     // Indexing
     let arr: [i32; 3] = [1, 2, 3];
     let x = arr[0];
-    arr[0] = 42;
+    arr[0] = 42;      // sema: arr is not mutable
 
     // Member access
     let point = Point { x: 3, y: 4 };
@@ -279,6 +302,10 @@ func expressions() -> i32 {
     let float_lit = 3.14;
     let sci_lit = 1.0e9;
     let suffix_lit = 42i64;
+
+    // Pointer comparison
+    let pa: *i32 = nullptr;
+    let is_null = pa == nullptr;
 
     return 0;
 }
@@ -308,7 +335,6 @@ func statements() -> i32 {
     return 0;
 }
 
-
 // ============================================================
 // 10. ANNOTATIONS
 // ============================================================
@@ -316,7 +342,7 @@ func statements() -> i32 {
 #[extern("C")]
 func test_extern() -> i32;
 
-#[noreturn] 
+#[noreturn]
 func quit() {
     exit(0);
 }
@@ -335,29 +361,24 @@ func main() -> i32 {
     // Construction
     let p1 = Point { x: 3, y: 4 };
     let p2 = Point::origin();
-    let p3 = p1 + p2;
-    let p4 = -p1;
 
     // Method calls
     let mag = p1.magnitude();
-    p1.translate(1, 1);
-
-    // Comparison
-    if p1 == p2 {
-        io::stdout().write("Equal\n");
-    }
+    p1.translate(1, 1);      // sema: p1 is not mutable
 
     // Function calls
     let result = add(1, 2);
     no_params();
 
-    // variables
+    // Variables
     let a: i32 = 42;
     let mut b: i32 = 10;
     b = b + 1;
 
-    // Pointers
-    let ptr: *i32 = &a;
+    // References and pointers
+    modify(&mut b);
+    let ra = read_only(&a);
+    let ptr: *i32 = &raw a;
 
     // Strings
     let s = "hello";

@@ -1127,7 +1127,17 @@ namespace xenon::semantic {
 
                 switch (unary_op_expr->op) {
                     case ast::UnaryOperatorKind::ADDRESS_OF: {
-                        result_type = type_registry_.register_pointer(operand_type, true);
+                        bool operand_is_mutable = false;
+                        Type* assignable_type = nullptr;
+                        if (!is_assignable_expression(unary_op_expr->operand.get(), assignable_type, operand_is_mutable)) {
+                            error(std::format("Address-of requires an lvalue, got '{}'", operand_type->name), unary_op_expr->location);
+                            result_type = type_registry_.get_error_type();
+                        } else if (unary_op_expr->is_mut && !operand_is_mutable) {
+                            error(std::format("Cannot take a mutable address of immutable value '{}'", operand_type->name), unary_op_expr->location);
+                            result_type = type_registry_.get_error_type();
+                        } else {
+                            result_type = type_registry_.register_pointer(operand_type, unary_op_expr->is_mut);
+                        }
                         break;
                     }
                     case ast::UnaryOperatorKind::DEREFERENCE: {

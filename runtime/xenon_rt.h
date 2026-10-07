@@ -26,24 +26,18 @@ typedef uint64_t XENON_U64;
 typedef float  XENON_F32;
 typedef double XENON_F64;
 
-// Native complex type
-typedef struct {
-    XENON_F64 real;
-    XENON_F64 imag;
-} XENON_CPLX128;
-
 // Platform-dependent architecture size type
 typedef size_t XENON_SIZE;
 
-// Booleans & Characters
+// Booleans & Runes
 typedef XENON_U8 XENON_BOOL;
-typedef uint32_t XENON_CHAR; // UTF-32 for standalone characters
+typedef uint32_t XENON_RUNE; // UTF-32 for standalone runes
 
 // Built-in Immutable String Types
 typedef struct {
     const XENON_U8* bytes;  // Const pointer to Read-Only UTF-8 bytes
     XENON_SIZE length;      // Immutable byte length tracking
-} XENON_STRING;
+} XENON_STR;
 
 // ============================================================================
 // ABI Macros (for C)
@@ -60,32 +54,13 @@ typedef struct {
 #endif
 
 // ============================================================================
-// Complex Number Operations
-// ============================================================================
-
-XENON_ABI XENON_CPLX128 xenon_init_complex(XENON_F64 real, XENON_F64 imag);
-XENON_ABI XENON_CPLX128 xenon_cplx128_add(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI XENON_CPLX128 xenon_cplx128_sub(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI XENON_CPLX128 xenon_cplx128_mul(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI XENON_CPLX128 xenon_cplx128_div(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI void xenon_cplx128_iadd(XENON_CPLX128* a, XENON_CPLX128 b);
-XENON_ABI void xenon_cplx128_isub(XENON_CPLX128* a, XENON_CPLX128 b);
-XENON_ABI void xenon_cplx128_imul(XENON_CPLX128* a, XENON_CPLX128 b);
-XENON_ABI void xenon_cplx128_idiv(XENON_CPLX128* a, XENON_CPLX128 b);
-XENON_ABI XENON_BOOL xenon_cplx128_eq(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI XENON_BOOL xenon_cplx128_neq(XENON_CPLX128 a, XENON_CPLX128 b);
-XENON_ABI XENON_F64 xenon_cplx128_abs(XENON_CPLX128 c);
-XENON_ABI XENON_CPLX128 xenon_cplx128_conj(XENON_CPLX128 c);
-XENON_ABI XENON_CPLX128 xenon_cplx128_polar(XENON_F64 magnitude, XENON_F64 angle);
-
-// ============================================================================
 // String Operations
 // ============================================================================
 
-XENON_ABI XENON_STRING xenon_init_string(const XENON_U8* bytes, XENON_SIZE length);
-XENON_ABI XENON_STRING xenon_string_from_cstr(const char* str); // String creation from C string (convenience for codegen)
-XENON_ABI XENON_BOOL xenon_string_eq(XENON_STRING a, XENON_STRING b);
-XENON_ABI XENON_BOOL xenon_string_neq(XENON_STRING a, XENON_STRING b);
+XENON_ABI XENON_STR xenon_init_string(const XENON_U8* bytes, XENON_SIZE length);
+XENON_ABI XENON_STR xenon_string_from_cstr(const char* str); // String creation from C string (convenience for codegen)
+XENON_ABI XENON_BOOL xenon_string_eq(XENON_STR a, XENON_STR b);
+XENON_ABI XENON_BOOL xenon_string_neq(XENON_STR a, XENON_STR b);
 
 
 // ============================================================================
@@ -93,10 +68,10 @@ XENON_ABI XENON_BOOL xenon_string_neq(XENON_STRING a, XENON_STRING b);
 // ============================================================================
 
 XENON_ABI void xenon_move(void** dest, void** src);
-XENON_ABI XENON_NOTHROW void xenon_panic(XENON_STRING message);
-XENON_ABI XENON_NOTHROW void xenon_assert(XENON_BOOL condition, XENON_STRING message);
+XENON_ABI XENON_NOTHROW void xenon_panic(XENON_STR message);
+XENON_ABI XENON_NOTHROW void xenon_assert(XENON_BOOL condition, XENON_STR message);
 XENON_ABI XENON_NOTHROW void xenon_exit(XENON_I32 code);
-XENON_ABI XENON_NOTHROW void xenon_println(XENON_STRING str);
+XENON_ABI XENON_NOTHROW void xenon_println(XENON_STR str);
 
 // ============================================================================
 // Program Entry Point
@@ -108,13 +83,7 @@ XENON_ABI XENON_NOTHROW void xenon_println(XENON_STRING str);
 //   void xenon_program_main(void)
 //
 // in their LLVM IR (or C if they're being weird about it).
-XENON_ABI int main(int, char**);
-
-// The user program implements this. Called from _start() after runtime init.
-void xenon_program_main(void);
-
-// Register a destructor to run at exit (for static vars, etc.)
-XENON_ABI void xenon_register_atexit(void (*func)(void));
+XENON_ABI int main(void);
 
 // ============================================================================
 // Additional Runtime Functions You'll Want

@@ -3,7 +3,7 @@
 #include "common/diagnostics.h"
 
 #define XENON_COMPILER_VERSION \
-"xec (Xenon Compiler) version 0.1.0 DEVELOPMENT BUILD\n" \
+"xec (Xenon Compiler) version 0.1 DEVELOPMENT BUILD\n" \
 "Copyright (c) 2026 Gabriel Aryee\n"  \
 "This is a development build. Expect bugs and incomplete features.\n" \
 "Things may break. That's part of the process.\n" \

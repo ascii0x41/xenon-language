@@ -460,12 +460,19 @@ namespace xenon::parser {
     }
 
     ExpressionPtr Parser::parse_unary() {
+        if (peek().type == TokenType::AMP) {
+            SourceLocation l = loc();
+            advance();
+            bool is_mut = accept(TokenType::MUT);
+            return std::make_unique<UnaryOpExpr>(l, UnaryOperatorKind::ADDRESS_OF, parse_unary(), is_mut);
+        }
+
         if (is_unary_token(peek().type)) {
             SourceLocation l = loc();
             auto op = token_to_unary_op(advance().type);
             return std::make_unique<UnaryOpExpr>(l, op, parse_unary());
         }
-        
+
         return parse_postfix();
     }
 

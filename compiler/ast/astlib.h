@@ -385,10 +385,11 @@ namespace xenon::ast {
     struct UnaryOpExpr : Expression {
         UnaryOperatorKind op;
         ExpressionPtr operand;
+        bool is_mut = false;  // for unary `&mut x`
         
-        UnaryOpExpr(SourceLocation l, UnaryOperatorKind o, ExpressionPtr operand_)
+        UnaryOpExpr(SourceLocation l, UnaryOperatorKind o, ExpressionPtr operand_, bool mut_flag = false)
             : Expression(NodeKind::UNARY_OP_EXPR, std::move(l))
-            , op(o), operand(std::move(operand_)) {}
+            , op(o), operand(std::move(operand_)), is_mut(mut_flag) {}
     };
 
     struct BinaryOpExpr : Expression {
