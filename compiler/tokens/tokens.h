@@ -25,6 +25,8 @@ namespace xenon::tokens {
 
         // Type qualifiers
         MUT,        // mut
+        RAW,        // raw
+        SELF,       // self
 
         // Control flow
         IF,         // if
@@ -158,6 +160,8 @@ namespace xenon::tokens {
         {"true",      TokenType::TRUE},
         {"false",     TokenType::FALSE},
         {"nullptr",   TokenType::NULLPTR},
+        {"raw",       TokenType::RAW},
+        {"self",      TokenType::SELF},
     };
 
     inline const std::unordered_set<std::string> INTEGER_SUFFIXES = {
@@ -187,6 +191,8 @@ namespace xenon::tokens {
             case TokenType::STATIC:         return "static";
             case TokenType::PUB:            return "pub";
             case TokenType::MUT:            return "mut";
+            case TokenType::RAW:            return "raw";
+            case TokenType::SELF:           return "self";
             case TokenType::IF:             return "if";
             case TokenType::ELSE:           return "else";
             case TokenType::WHILE:          return "while";

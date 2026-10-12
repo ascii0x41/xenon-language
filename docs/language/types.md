@@ -8,27 +8,27 @@ time. Types are either **primitive** (built into the language) or
 
 This document specifies:
 
-- Implicit numeric widening.
-- Primitive types.
-- Composite types.
-- Type equality and conversion.
-- Copy semantics.
+* Implicit numeric widening.
+* Primitive types.
+* Composite types.
+* Type equality and conversion.
+* Copy semantics.
 
 ### 1.1 Implicit numeric widening
 
 Implicit conversion is allowed only when it is **widening**,
 **same-kind**, and **same-signedness**:
 
-- `uN -> uM` where `M > N` (e.g. `u8 -> u32`)
-- `iN -> iM` where `M > N` (e.g. `i16 -> i64`)
-- `f32 -> f64`
+* `uN -> uM` where `M > N` (e.g. `u8 -> u32`)
+* `iN -> iM` where `M > N` (e.g. `i16 -> i64`)
+* `f32 -> f64`
 
 No other implicit numeric conversion is allowed:
 
-- Narrowing (`u32 -> u8`) is not implicit.
-- Signedness change (`u32 -> i32`, `i32 -> u32`) is not implicit.
-- Integer to float (`i32 -> f64`) is not implicit.
-- Float to integer is not implicit.
+* Narrowing (`u32 -> u8`) is not implicit.
+* Signedness change (`u32 -> i32`, `i32 -> u32`) is not implicit.
+* Integer to float (`i32 -> f64`) is not implicit.
+* Float to integer is not implicit.
 
 These rules are the *only* implicit numeric conversions. They are used
 uniformly by arithmetic, comparison, assignment, argument passing, and
@@ -38,11 +38,7 @@ There is no explicit conversion syntax in v0.1 (see §4.4).
 
 > **Note:** Literal typing is a separate mechanism, not a conversion. An
 > unsuffixed `1` does not *convert* to `u8`; it *is* `u8` in a context
-> that requires `u8`. See `literals.md`.
-
-> **Open question:** Whether `uN -> iM` is ever an implicit conversion
-> (and under exactly what circumstances, e.g. `M > N` only) has not been
-> decided. Until it is, it is **not** implicit.
+> that requires `u8`. See [literals.md](literals.md).
 
 ## 2. Primitive types
 
@@ -69,9 +65,9 @@ address. It follows the unsigned rules everywhere.
 
 Overflow behavior depends on the build mode:
 
-- **Debug builds:** arithmetic overflow is checked. When overflow
+* **Debug builds:** arithmetic overflow is checked. When overflow
   occurs, the program panics.
-- **Release builds:** overflow checks are not guaranteed to be present.
+* **Release builds:** overflow checks are not guaranteed to be present.
   The result may wrap according to the machine's two's-complement
   semantics. A release build must not be relied upon to panic.
 
@@ -79,7 +75,7 @@ Overflow behavior depends on the build mode:
 universal guarantee of the language. The purpose of debug builds is to
 catch these bugs early.
 
-What a panic *is* is specified in `runtime.md`.
+What a panic *is* is specified in [runtime.md](runtime.md).
 
 ### 2.2 Floating-point types
 
@@ -122,7 +118,7 @@ A `rune` is not a `u32` and does not implicitly convert to or from any
 integer type. A `rune` is not a byte; a `str` is UTF-8 bytes, and
 `s[i]` yields a `u8`, not a `rune`.
 
-See `literals.md` for rune literal rules.
+See [literals.md](literals.md) for rune literal rules.
 
 ### 2.4 `bool`
 
@@ -135,18 +131,18 @@ return value has return type `void`.
 
 `void` cannot be used as a variable type, a field type, an array element
 type, or a parameter type. A `void` expression cannot appear in value
-position (see `expressions.md`).
+position (see [expressions.md](expressions.md)).
 
 ### 2.6 `nulltype`
 
 `nulltype` is the type of the literal `nullptr`. It has exactly one value:
 `nullptr`.
 
-- `nulltype` implicitly converts to any pointer type (`*T` or
+* `nulltype` implicitly converts to any pointer type (`*T` or
   `*mut T`).
-- It does not convert to any reference type.
-- A pointer type never implicitly converts to `nulltype`.
-- `nullptr` in a context that does not constrain it to a pointer type
+* It does not convert to any reference type.
+* A pointer type never implicitly converts to `nulltype`.
+* `nullptr` in a context that does not constrain it to a pointer type
   is an error ("cannot infer pointer type for nullptr").
 
 `nulltype` is a user-visible type. A `nulltype` value cannot be
@@ -157,18 +153,18 @@ let n: nulltype = nullptr;
 ```
 
 Pointer comparisons involving `nullptr` are specified in
-`expressions.md` §4.2.
+[expressions.md](expressions.md) §4.2.
 
 ### 2.7 References and pointers
 
 There are two families of types for referring to memory:
 
-- `&T` and `&mut T` are references.
-- `*T` and `*mut T` are raw pointers.
+* `&T` and `&mut T` are references.
+* `*T` and `*mut T` are raw pointers.
 
 These are four distinct types with different capabilities. The
 conversions between them, how they are created, and how they are used
-are specified in `references-and-pointers.md`.
+are specified in [references-and-pointers.md](references-and-pointers.md).
 
 ### 2.8 `str`
 
@@ -189,20 +185,20 @@ type str {
 
 Properties:
 
-- Immutable. You cannot write through a `str`.
-- Bytes are always valid UTF-8.
-- `bytes` is never null. The empty `str` has `length = 0` and a
+* Immutable. You cannot write through a `str`.
+* Bytes are always valid UTF-8.
+* `bytes` is never null. The empty `str` has `length = 0` and a
   non-null `bytes` pointer.
-- Two words. Copying a `str` is a two-word copy.
-- `str` does not own its bytes.
+* Two words. Copying a `str` is a two-word copy.
+* `str` does not own its bytes.
 
 In v0.1, every `str` value is backed by a string literal in the
 source. Literals live in read-only static data for the entire duration
 of the program. Consequently:
 
-- `str` values never dangle.
-- There is no allocation for strings.
-- There is no concatenation. `a + b` is not defined for `str`.
+* `str` values never dangle.
+* There is no allocation for strings.
+* There is no concatenation. `a + b` is not defined for `str`.
 
 Building strings is not part of the language in v0.1. An owned string
 type (`String`) and concatenation are planned as a library type in a
@@ -228,15 +224,15 @@ stdlib) will be the owned type. The case distinction is deliberate.
 Where `T` is the element type and `N` is a **non-zero unsigned integer
 literal**.
 
-- `N` must be greater than zero. `[T; 0]` is invalid.
-- In v0.1, `N` can only be an integer literal. There are no `const`
+* `N` must be greater than zero. `[T; 0]` is invalid.
+* In v0.1, `N` can only be an integer literal. There are no `const`
   declarations and no compile-time evaluation of expressions (`const`
   is planned for v0.2).
-- Arrays carry their length in the type. `[u8; 4]` and `[u8; 5]` are
+* Arrays carry their length in the type. `[u8; 4]` and `[u8; 5]` are
   different types.
-- Valid indices are `0 ..= N-1`.
-- Array indexing is bounds checked. An out-of-bounds index is a runtime
-  failure (a panic), not undefined behavior. See `expressions.md` §2.4.
+* Valid indices are `0 ..= N-1`.
+* Array indexing is bounds checked. An out-of-bounds index is a runtime
+  failure (a panic), not undefined behavior. See [expressions.md](expressions.md) §2.4.
 
 ```xe
 let a: [u8; 10] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -245,7 +241,7 @@ let n = 4;
 let c: [u8; n];     // error: array length must be an integer literal
 ```
 
-See `literals.md` §8.1 for array literals.
+See [literals.md](literals.md) §8.1 for array literals.
 
 ### 3.2 User-defined types
 
@@ -257,21 +253,21 @@ type <name> {
 
 Rules:
 
-- Fields are ordered. Field order is declaration order. No reordering
+* Fields are ordered. Field order is declaration order. No reordering
   is performed by the compiler. Padding and layout are unspecified in
   v0.1.
-- Types are **nominal**. Two types with the same shape are distinct
+* Types are **nominal**. Two types with the same shape are distinct
   types. `type A { x: i32; }` and `type B { x: i32; }` are not
   interchangeable.
-- A type cannot contain itself directly. Indirect recursion through a
+* A type cannot contain itself directly. Indirect recursion through a
   pointer is allowed.
-- A type may be empty: `type Empty {}`.
-- Methods and static members are declared in `impl <name>` blocks. See
-  `methods.md`.
-- Fields are private by default. A field is made visible to other
+* A type may be empty: `type Empty {}`.
+* Methods and static members are declared in `impl <name>` blocks. See
+  [methods.md](methods.md).
+* Fields are private by default. A field is made visible to other
   modules with `pub`: `pub x: i32;`.
-- A struct literal may only initialise fields that are accessible from
-  the current module. See `modules.md` §4.2.
+* A struct literal may only initialise fields that are accessible from
+  the current module. See [modules.md](modules.md) §4.2.
 
 ## 4. Type equality and conversion
 
@@ -279,26 +275,26 @@ Rules:
 
 Two types are equal if:
 
-- They are the same primitive type (`i32 == i32`).
-- They are the same nominal user type (identity by declaration).
+* They are the same primitive type (`i32 == i32`).
+* They are the same nominal user type (identity by declaration).
 
 Two types are **not** equal even if they have the same layout. Nominal
 typing applies throughout.
 
 ### 4.2 Value equality
 
-The `==` and `!=` operators are specified in `expressions.md` §4.2. In
+The `==` and `!=` operators are specified in [expressions.md](expressions.md) §4.2. In
 summary:
 
-- **Numeric types:** operands are brought to a common type by the
+* **Numeric types:** operands are brought to a common type by the
   widening rules in §1.1, then compared by value. Operands with no
   common type are a compile error.
-- **`rune`:** compares scalar values.
-- **`bool`:** normal boolean equality.
-- **`str`:** compares byte content.
-- **Pointers and `nullptr`:** compare addresses (see
-  `expressions.md` §4.2).
-- **User-defined types:** `==` is **not available**. There is no
+* **`rune`:** compares scalar values.
+* **`bool`:** normal boolean equality.
+* **`str`:** compares byte content.
+* **Pointers and `nullptr`:** compare addresses (see
+  [expressions.md](expressions.md) §4.2).
+* **User-defined types:** `==` is **not available**. There is no
   operator overloading in v0.1.
 
 Cross-kind comparison (`i32 == f64`, `u32 == i32`, `i32 == f32`) is a
@@ -327,7 +323,7 @@ let e = 1.0;         // 1.0 defaults to f32 (unconstrained)
 If an `{integer}` or `{float}` is still unconstrained after type
 inference, it defaults to `i32` or `f32` respectively.
 
-See `literals.md` for suffixes, digit separators, and range checks.
+See [literals.md](literals.md) for suffixes, digit separators, and range checks.
 
 ### 4.4 Explicit conversions
 
@@ -338,7 +334,7 @@ Consequence: narrowing and cross-kind conversion are not expressible
 in v0.1. A `u32` cannot be converted to a `u8`; an `i32` cannot be
 converted to an `f64`.
 
-The scalar construction form `T { x }` (see `literals.md` §8.3) is the
+The scalar construction form `T { x }` (see [literals.md](literals.md) §8.3) is the
 one form that resembles a conversion. Its rules are not yet fully
 specified.
 

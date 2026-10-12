@@ -4,6 +4,14 @@ namespace xenon::parser {
 
     namespace {
 
+        // Clone an ast::Name chain for building type expressions referencing the
+        // impl type when parsing method receivers.
+        static ast::NamePtr clone_name(const ast::Name* src) {
+            if (!src) return nullptr;
+            ast::NamePtr next = clone_name(src->next.get());
+            return std::make_unique<ast::Name>(src->location, src->identifier, std::move(next), src->is_global);
+        }
+
         // Sets `ref` to `value` for the lifetime of the guard, then restores it.
         struct FlagGuard {
             bool& ref;
@@ -263,6 +271,46 @@ namespace xenon::parser {
         return params;
     }
 
+    std::vector<VariableDeclPtr> Parser::parse_method_parameters(const ast::Name* impl_type) {
+        std::vector<VariableDeclPtr> params;
+
+        expect(TokenType::LPAREN, "Expected '(' to start parameter list");
+
+        if (!check(TokenType::RPAREN)) {
+            bool first = true;
+            do {
+                SourceLocation param_loc = loc();
+                // If this is the first parameter and it's a receiver form, handle specially.
+                if (first && check(TokenType::AMP)) {
+                    // &self or &mut self
+                    advance();
+                    bool is_mut = accept(TokenType::MUT);
+                    auto name_tok = expect(TokenType::SELF, "Expected 'self' after '&' in method receiver");
+                    TypeExprPtr type_expr = nullptr;
+                    if (impl_type) {
+                        type_expr = std::make_unique<ReferenceTypeExpr>(param_loc, std::make_unique<NamedTypeExpr>(param_loc, clone_name(impl_type)), is_mut);
+                    }
+                    params.push_back(std::make_unique<VariableDecl>(param_loc, std::string("self"), std::move(type_expr), nullptr, false));
+                    first = false;
+                    continue;
+                }
+
+                // Fallback to normal parameter grammar
+                bool mut = accept(TokenType::MUT);
+                auto name = expect(TokenType::IDENTIFIER, "Expected parameter name in parameter list").lexeme;
+                TypeExprPtr type_expr = nullptr;
+                if (accept(TokenType::COLON)) {
+                    type_expr = parse_type_expression();
+                }
+                params.push_back(std::make_unique<VariableDecl>(param_loc, std::move(name), std::move(type_expr), nullptr, mut));
+                first = false;
+            } while (accept(TokenType::COMMA));
+        }
+
+        expect(TokenType::RPAREN, "Expected ')' after parameter list");
+        return params;
+    }
+
 
     // Helper functions for token conversion
     BinaryOperatorKind token_to_binary_op(TokenType type) {
@@ -463,8 +511,15 @@ namespace xenon::parser {
         if (peek().type == TokenType::AMP) {
             SourceLocation l = loc();
             advance();
-            bool is_mut = accept(TokenType::MUT);
-            return std::make_unique<UnaryOpExpr>(l, UnaryOperatorKind::ADDRESS_OF, parse_unary(), is_mut);
+            // Support: &x, &mut x, &raw x, &raw mut x
+            bool is_raw = accept(TokenType::RAW);
+            bool is_mut = false;
+            if (is_raw) {
+                is_mut = accept(TokenType::MUT);
+            } else {
+                is_mut = accept(TokenType::MUT);
+            }
+            return std::make_unique<UnaryOpExpr>(l, UnaryOperatorKind::ADDRESS_OF, parse_unary(), is_mut, is_raw);
         }
 
         if (is_unary_token(peek().type)) {
@@ -915,11 +970,11 @@ namespace xenon::parser {
     }
 
 
-    MethodDeclPtr Parser::parse_method_declaration(bool is_public, bool is_static) {
+    MethodDeclPtr Parser::parse_method_declaration(bool is_public, bool is_static, const ast::Name* impl_type) {
         SourceLocation l = loc();
         expect(TokenType::FUNC, "Expected 'func' keyword");
         auto name = expect(TokenType::IDENTIFIER, "Expected method name after 'func'").lexeme;
-        auto params = parse_parameters();
+        auto params = parse_method_parameters(impl_type);
         auto return_type = parse_return_type();
         auto body = parse_optional_body();
         return std::make_unique<MethodDecl>(l, std::move(name), std::move(params), std::move(return_type), std::move(body), is_public, is_static);
@@ -990,7 +1045,7 @@ namespace xenon::parser {
             }
 
             if (check(TokenType::FUNC)) {
-                auto method = parse_method_declaration(member_public, is_static);
+                auto method = parse_method_declaration(member_public, is_static, type_name.get());
                 attach_metadata(*method, std::move(meta));
                 methods.push_back(std::move(method));
                 continue;

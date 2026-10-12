@@ -9,13 +9,13 @@ The compiler sexeches upward from the current working directory until it finds t
 
 Required keys:
 
-- `name` — project name.
-- `version` — project version.
-- `entry` — path to the main Xenon source file relative to the project root.
+* `name` — project name.
+* `version` — project version.
+* `entry` — path to the main Xenon source file relative to the project root.
 
 Optional keys:
 
-- `authors` — array of author names.
+* `authors` — array of author names.
 
 Example:
 
@@ -33,9 +33,9 @@ authors = ["Your Name"]
 
 Optional keys:
 
-- `output` — output directory for build artifacts. Defaults to `build/`.
-- `target` — target triple, e.g. `x86_64-linux`.
-- `optimisation` — `none`, `debug`, or `release`.
+* `output` — output directory for build artifacts. Defaults to `build/`.
+* `target` — target triple, e.g. `x86_64-linux`.
+* `optimisation` — `none`, `debug`, or `release`.
 
 Example:
 
@@ -68,7 +68,7 @@ dead_code = "warn"
 
 This section currently supports one key:
 
-- `enabled` — set to `true` or `false`.
+* `enabled` — set to `true` or `false`.
 
 Example:
 
@@ -79,6 +79,6 @@ enabled = "false"
 
 ## Notes
 
-- The TOML parser currently supports simple key-value pairs and string arrays.
-- Comments are supported with `#`.
-- The compiler only reads values from the sections shown above.
+* The TOML parser currently supports simple key-value pairs and string arrays.
+* Comments are supported with `#`.
+* The compiler only reads values from the sections shown above.

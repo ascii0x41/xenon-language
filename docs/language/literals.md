@@ -39,7 +39,7 @@ in numeric code. The rule is narrow: literal metavariables only appear
 in literal expressions, and they are resolved by the end of type
 inference. They never escape into user-visible types.
 
-See `types.md` §4.3 for the type-level rules.
+See [types.md](types.md) §4.3 for the type-level rules.
 
 ## 2. Integer literals
 
@@ -129,7 +129,7 @@ the negated value against the target type.
 ```
 
 For unsigned types, the negation is always an error (see
-`expressions.md` §5.2).
+[expressions.md](expressions.md) §5.2).
 
 ```xe
 -1u8         // error: unary minus on unsigned
@@ -214,12 +214,12 @@ A `rune` represents a single Unicode scalar value.
 
 ### 4.2 Rules
 
-- A rune literal contains exactly one Unicode scalar value.
-- `'ab'` is an error: two scalars.
-- `''` is an error: zero scalars.
-- `'\u{D800}'` is an error: surrogate.
-- `'\u{110000}'` is an error: above U+10FFFF.
-- A bare newline inside `'...'` is an error; use `'\n'`.
+* A rune literal contains exactly one Unicode scalar value.
+* `'ab'` is an error: two scalars.
+* `''` is an error: zero scalars.
+* `'\u{D800}'` is an error: surrogate.
+* `'\u{110000}'` is an error: above U+10FFFF.
+* A bare newline inside `'...'` is an error; use `'\n'`.
 
 ### 4.3 Typing rules
 
@@ -290,17 +290,17 @@ let c: [u8; 5] = "Linus";    // error: expected [u8; 5], got str
 
 Programs cannot write the `str` representation themselves. There is no
 way to construct a `str` other than from a literal or by passing one
-along. See `types.md` §2.8.
+along. See [types.md](types.md) §2.8.
 
 ### 5.4 What strings are not
 
-- Not owned. `str` points at bytes it does not own.
-- Not mutable. You cannot write through a `str`.
-- Not NUL-terminated. Bytes with value `0` are ordinary bytes.
-- Not concatenable. `a + b` is not defined for `str` in v0.1.
-- Not indexable by `rune`. `s[i]`, if it exists, is a `u8`.
-- Not addressable. A string literal is a value, not a storage location,
-  so `&"hello"` is an error (see `references-and-pointers.md` §2.1).
+* Not owned. `str` points at bytes it does not own.
+* Not mutable. You cannot write through a `str`.
+* Not NUL-terminated. Bytes with value `0` are ordinary bytes.
+* Not concatenable. `a + b` is not defined for `str` in v0.1.
+* Not indexable by `rune`. `s[i]`, if it exists, is a `u8`.
+* Not addressable. A string literal is a value, not a storage location,
+  so `&"hello"` is an error (see [references-and-pointers.md](references-and-pointers.md) §2.1).
   Pass `str` by value; it is already a view.
 
 ## 6. Boolean literals
@@ -354,7 +354,7 @@ in braces:
 The number of elements must equal `N`.
 
 There is no repeat form (`[expr; N]`). There is no empty array literal,
-because `[T; 0]` is not a valid type (see `types.md` §3.1).
+because `[T; 0]` is not a valid type (see [types.md](types.md) §3.1).
 
 Element types may be literal metavariables, which unify across the
 array:
@@ -389,7 +389,7 @@ are the variables `x` and `y`.
 
 A literal may initialise only fields that are accessible from the
 current module. Fields that are private may only be initialised by
-code in the module that declares the type. See `modules.md` §4.2.
+code in the module that declares the type. See [modules.md](modules.md) §4.2.
 
 Any field that a literal does not initialise holds whatever is stored in
 that memory. Reading such a field is **UB**.
@@ -429,16 +429,16 @@ For `usize`, the value inside the braces must be an unsigned integer.
 
 ## 10. What sema enforces
 
-- [ ] Integer literal fits its resolved type.
-- [ ] Float literal fits its resolved type (no implicit overflow to Inf).
-- [ ] Rune literal is exactly one Unicode scalar, not a surrogate.
-- [ ] All escapes in string and rune literals are valid.
-- [ ] `{integer}` and `{float}` metavariables are resolved by the end of
+* [ ] Integer literal fits its resolved type.
+* [ ] Float literal fits its resolved type (no implicit overflow to Inf).
+* [ ] Rune literal is exactly one Unicode scalar, not a surrogate.
+* [ ] All escapes in string and rune literals are valid.
+* [ ] `{integer}` and `{float}` metavariables are resolved by the end of
       inference.
-- [ ] Suffix names a known primitive type.
-- [ ] Digit separators appear only between digits.
-- [ ] Unary minus on an integer literal range-checks the negated value.
-- [ ] A string literal is never accepted as anything other than `str`.
-- [ ] Array literal element count matches `N` in the typed form.
-- [ ] A struct literal initialises only fields accessible from the
+* [ ] Suffix names a known primitive type.
+* [ ] Digit separators appear only between digits.
+* [ ] Unary minus on an integer literal range-checks the negated value.
+* [ ] A string literal is never accepted as anything other than `str`.
+* [ ] Array literal element count matches `N` in the typed form.
+* [ ] A struct literal initialises only fields accessible from the
       current module.

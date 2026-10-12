@@ -407,7 +407,7 @@ impl Point {
         };
     }
 
-    pub operator-(&self other: Point) -> Point {
+    pub operator-(&self, other: Point) -> Point {
         return Point {
             x: self.x - other.x,
             y: self.y - other.y
@@ -453,7 +453,7 @@ impl Point {
 
 ---
 
-# v0.3 — Error Handling, Enums, Pattern Matching, and Iteration Syntax
+## v0.3 — Error Handling, Enums, Pattern Matching, and Iteration Syntax
 
 ## Error Handling
 
@@ -516,7 +516,7 @@ type Pair<T> = [T; 2];
 
 ---
 
-# v0.4+ — Future / Uncertain
+## v0.4+ — Future / Uncertain
 
 ## Language
 

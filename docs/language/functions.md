@@ -7,18 +7,18 @@ computation, and optionally returns a value.
 
 This document specifies:
 
-- Function declaration syntax.
-- Parameters.
-- Return values.
-- Calling conventions.
-- Recursion.
-- Overloading.
-- Annotations and external functions.
-- Visibility.
-- `main`.
+* Function declaration syntax.
+* Parameters.
+* Return values.
+* Calling conventions.
+* Recursion.
+* Overloading.
+* Annotations and external functions.
+* Visibility.
+* `main`.
 
 Functions declared inside an `impl` block (methods and static functions)
-are specified in `methods.md`.
+are specified in [methods.md](methods.md).
 
 ## 2. Declaration syntax
 
@@ -26,11 +26,11 @@ are specified in `methods.md`.
 func <name> ( <param> , ... ) [-> <return_type>] <body>
 ```
 
-- `<name>` is an identifier.
-- `<param>` is `[mut] <name> : <type>`.
-- `<return_type>` is optional. If omitted, the function returns `void`.
+* `<name>` is an identifier.
+* `<param>` is `[mut] <name> : <type>`.
+* `<return_type>` is optional. If omitted, the function returns `void`.
   `-> void` may be written explicitly and means the same thing.
-- `<body>` is a block `{ ... }`, except for external functions (see §8).
+* `<body>` is a block `{ ... }`, except for external functions (see §8).
 
 Examples:
 
@@ -84,7 +84,7 @@ func increment(x: &mut i32) {
 }
 ```
 
-See `references-and-pointers.md`.
+See [references-and-pointers.md](references-and-pointers.md).
 
 ### 3.1 Parameter passing
 
@@ -186,7 +186,7 @@ func foo(x: i32) -> i32 {
 ```
 
 The exact rules for deciding which statements are guaranteed to return
-are part of the control-flow analysis. See `statements.md` §7.1.
+are part of the control-flow analysis. See [statements.md](statements.md) §7.1.
 
 ### 4.2 `return` semantics
 
@@ -265,7 +265,7 @@ by_ref(&1);                // error: 1 is not a place
 
 The one exception is a method receiver, where the call syntax
 `value.method()` supplies the receiver according to the method's `self`
-declaration. See `methods.md`.
+declaration. See [methods.md](methods.md).
 
 ### 5.2 Arity
 
@@ -317,8 +317,8 @@ name if their signatures differ.
 
 A function's **signature** consists of:
 
-- the function name, and
-- the parameter types, in order.
+* the function name, and
+* the parameter types, in order.
 
 The return type is not part of the signature. A parameter's `mut`
 qualifier is not part of the signature either.
@@ -343,7 +343,7 @@ func g(x: &mut i32) { ... }                // ok: distinct signatures
 ```
 
 This is function overloading only. There is no operator overloading in
-v0.1 (see `expressions.md` §1).
+v0.1 (see [expressions.md](expressions.md) §1).
 
 ### 7.1 Overload resolution
 
@@ -352,7 +352,7 @@ A call is resolved in this order:
 1. **Exact match.** A function whose parameter types exactly match the
    argument types.
 2. **Widening match.** Otherwise, a function the arguments can be
-   passed to using only the implicit widening rules of `types.md`
+   passed to using only the implicit widening rules of [types.md](types.md)
    §1.1.
 3. Otherwise resolution fails and the call is an error.
 
@@ -384,11 +384,11 @@ func quit() {
 }
 ```
 
-- `#[extern("C")]` marks a function as external, with the named calling
+* `#[extern("C")]` marks a function as external, with the named calling
   convention. An external function has no body and its declaration ends
   with `;`. It is the annotation that makes the body optional: a
   function without `#[extern(...)]` must have a body.
-- `#[noreturn]` marks a function that never returns to its caller.
+* `#[noreturn]` marks a function that never returns to its caller.
 
 A bodiless declaration without `#[extern(...)]` is an error.
 
@@ -420,7 +420,7 @@ pub func add(a: i32, b: i32) -> i32 {
 }
 ```
 
-Module visibility rules are specified in `modules.md`.
+Module visibility rules are specified in [modules.md](modules.md).
 
 ## 10. `main`
 
@@ -434,7 +434,7 @@ func main() {
 }
 ```
 
-`main` must be in the module named `main` (see `modules.md`).
+`main` must be in the module named `main` (see [modules.md](modules.md)).
 
 `main` may return `void` or `i32`:
 

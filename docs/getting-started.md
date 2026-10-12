@@ -2,9 +2,9 @@
 
 ## Requirements
 
-- CMake 3.20+
-- C++20 compiler (GCC or Clang)
-- LLVM libraries (for future backend work)
+* CMake 3.20+
+* C++20 compiler (GCC or Clang)
+* LLVM libraries (for future backend work)
 
 ## Build the compiler
 

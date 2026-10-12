@@ -8,11 +8,11 @@ other modules can see.
 
 This document specifies:
 
-- Source files and module declarations.
-- Imports.
-- Visibility (`pub`).
-- Paths.
-- The `main` module.
+* Source files and module declarations.
+* Imports.
+* Visibility (`pub`).
+* Paths.
+* The `main` module.
 
 ## 2. Source files and module declarations
 
@@ -29,10 +29,10 @@ func main() {
 }
 ```
 
-- `module <name>;` is required in every `.xe` file, with one exception:
+* `module <name>;` is required in every `.xe` file, with one exception:
   `runtime.xe` (see §2.2).
-- The name may be a path: `module verification::age_verification;`.
-- There are no inline modules. Declarations of the form
+* The name may be a path: `module verification::age_verification;`.
+* There are no inline modules. Declarations of the form
   `module math { ... }` and `pub module sub { ... }` do not exist.
 
 The module declaration and any imports must appear at the top of the
@@ -63,7 +63,7 @@ no inline nested modules.
 
 `runtime.xe` is a special module that is part of the compiler/runtime.
 It does not need a `module` declaration. It contains the language's
-runtime support, such as `panic` and `error`. See `runtime.md`.
+runtime support, such as `panic` and `error`. See [runtime.md](runtime.md).
 
 ### 2.3 Files and project layout
 
@@ -82,12 +82,12 @@ import math;
 import utils::helpers;
 ```
 
-- The operand of `import` is a **module path**. The imported entity is
+* The operand of `import` is a **module path**. The imported entity is
   the module itself.
-- The full module path is required.
-- There are no aliases, no glob imports, and no importing individual
+* The full module path is required.
+* There are no aliases, no glob imports, and no importing individual
   items. (They may be added in a later version.)
-- `use` is not part of Xenon.
+* `use` is not part of Xenon.
 
 ```xe
 module main;
@@ -122,12 +122,12 @@ func internal_helper() { ... }                 // private
 
 ### 4.1 What can be `pub`
 
-- Functions: `pub func f() { ... }`
-- Types: `pub type Point { ... }`
-- Fields: `pub x: i32;` (within a type declaration)
-- Methods and static functions: `pub func ...` and `pub static func ...`
+* Functions: `pub func f() { ... }`
+* Types: `pub type Point { ... }`
+* Fields: `pub x: i32;` (within a type declaration)
+* Methods and static functions: `pub func ...` and `pub static func ...`
   (within an `impl` block)
-- Static variables: `pub static let ...` (within an `impl` block)
+* Static variables: `pub static let ...` (within an `impl` block)
 
 Modules themselves have no visibility. A module is accessible from
 another module if it has been imported.
@@ -189,13 +189,13 @@ which enforces `value <= 150`.
 
 Consequences:
 
-- A literal for a type that has any private field can only appear in the
+* A literal for a type that has any private field can only appear in the
   defining module.
-- A literal outside the defining module is legal only when every field
+* A literal outside the defining module is legal only when every field
   of the type is `pub`.
-- The same rule applies to named literals (`Age { value: 255 }`) and
+* The same rule applies to named literals (`Age { value: 255 }`) and
   positional literals (`Age { 255 }`).
-- A public type with private fields exposes constructors (usually
+* A public type with private fields exposes constructors (usually
   `static` functions) to build values.
 
 ### 4.3 Method and static visibility
@@ -211,7 +211,7 @@ impl Point {
 ```
 
 An `impl` block has no visibility of its own; each member declares its
-own. See `methods.md`.
+own. See [methods.md](methods.md).
 
 ## 5. Paths
 
@@ -224,26 +224,26 @@ Counter::total              // static variable `total` of type `Counter`
 Point                       // a type in the current module
 ```
 
-- An **unqualified** name looks up the name in the current module
+* An **unqualified** name looks up the name in the current module
   (declarations in the current file).
-- A **qualified** path names an item through an imported module or a
+* A **qualified** path names an item through an imported module or a
   type.
 
 There is no `crate`, `self::` or `super::` path root.
 
 > **Open question:** Whether `self::` and `super::` exist is not
 > specified. `self` is now the method-receiver keyword (see
-> `methods.md`).
+> [methods.md](methods.md)).
 
 ### 5.1 Resolution
 
 The compiler must resolve every name to exactly one declaration:
 
-- If a name is not found, it is an error.
-- A path through a module is accessible only if each item named is
+* If a name is not found, it is an error.
+* A path through a module is accessible only if each item named is
   `pub` (or the code is in the same module).
-- Functions with the same name may coexist if their signatures differ
-  (function overloading, `functions.md` §7). Overload resolution is
+* Functions with the same name may coexist if their signatures differ
+  (function overloading, [functions.md](functions.md) §7). Overload resolution is
   applied to the functions found by the path.
 
 ## 6. The `main` module
@@ -271,12 +271,12 @@ A declaration is accessible from another module if:
 
 ## 8. Summary
 
-- Each `.xe` file is one module and starts with `module <name>;`
+* Each `.xe` file is one module and starts with `module <name>;`
   (except `runtime.xe`).
-- There are no inline modules and no `crate`.
-- Imports use `import <module path>;` and import a whole module. There
+* There are no inline modules and no `crate`.
+* Imports use `import <module path>;` and import a whole module. There
   is no `use`.
-- Declarations are private by default; `pub` makes them visible.
-- Fields are private by default, and a struct literal may only
+* Declarations are private by default; `pub` makes them visible.
+* Fields are private by default, and a struct literal may only
   initialise accessible fields.
-- `main` is in the module named `main`.
+* `main` is in the module named `main`.

@@ -6,9 +6,9 @@ This document specifies Xenon's reference and pointer model.
 
 Xenon has two families of types for referring to memory:
 
-- **References** (`&T`, `&mut T`) are non-null, auto-dereferenced
+* **References** (`&T`, `&mut T`) are non-null, auto-dereferenced
   aliases for a value.
-- **Pointers** (`*T`, `*mut T`) are raw addresses. They may be null.
+* **Pointers** (`*T`, `*mut T`) are raw addresses. They may be null.
   They do not auto-dereference.
 
 These are four distinct types with different capabilities.
@@ -43,14 +43,14 @@ A reference is a non-null, immutable or mutable alias for a value.
 &mut T      // mutable reference to T
 ```
 
-- `&T` refers to a value you may read but not write.
-- `&mut T` refers to a value you may read and write.
-- References are never null.
-- References are the size of an ordinary address (one word). They are
+* `&T` refers to a value you may read but not write.
+* `&mut T` refers to a value you may read and write.
+* References are never null.
+* References are the size of an ordinary address (one word). They are
   not fat pointers.
-- References **auto-dereference**. There is no dereference operator for
+* References **auto-dereference**. There is no dereference operator for
   references (see §2.2).
-- A reference is created with `&` or `&mut`. The operand must be a
+* A reference is created with `&` or `&mut`. The operand must be a
   place. `&mut` requires a mutable place.
 
 ### 2.1 Creating references
@@ -154,13 +154,13 @@ A pointer is a raw memory address.
 *mut T      // pointer to T (readable and writable)
 ```
 
-- `*T` points at a `T`; you may read through it but not write.
-- `*mut T` points at a `T`; you may read and write through it.
-- A pointer may be null.
-- A pointer may dangle.
-- A pointer does not auto-dereference. Use `*p` to access the
+* `*T` points at a `T`; you may read through it but not write.
+* `*mut T` points at a `T`; you may read and write through it.
+* A pointer may be null.
+* A pointer may dangle.
+* A pointer does not auto-dereference. Use `*p` to access the
   pointed-to value.
-- A pointer is created with `&raw` or `&raw mut`.
+* A pointer is created with `&raw` or `&raw mut`.
 
 ### 3.1 The raw-pointer operators
 
@@ -169,10 +169,10 @@ A pointer is a raw memory address.
 &raw mut x      // raw pointer to x, mutable: type *mut T
 ```
 
-- `x` must be a place.
-- `&raw x` may be applied to any place. The result has type `*T`, where
+* `x` must be a place.
+* `&raw x` may be applied to any place. The result has type `*T`, where
   `T` is the type of `x`.
-- `&raw mut x` requires `x` to be a mutable place. The result has type
+* `&raw mut x` requires `x` to be a mutable place. The result has type
   `*mut T`.
 
 ```xe
@@ -206,8 +206,8 @@ The unary `*` operator dereferences a **pointer**:
 
 `*p` is a place expression referring to the pointed-to location.
 
-- `*p` where `p: *T` is an immutable place of type `T`.
-- `*p` where `p: *mut T` is a mutable place of type `T`.
+* `*p` where `p: *T` is an immutable place of type `T`.
+* `*p` where `p: *mut T` is a mutable place of type `T`.
 
 Dereferencing does not check validity. Dereferencing a dangling or null
 pointer is undefined behavior.
@@ -261,7 +261,7 @@ let q: *mut i32 = nullptr;       // ok
 let r: &i32 = nullptr;           // error: references are non-null
 ```
 
-Pointer comparisons with `nullptr` are specified in `expressions.md`
+Pointer comparisons with `nullptr` are specified in [expressions.md](expressions.md)
 §4.2.
 
 ## 6. Pointer arithmetic
@@ -272,11 +272,11 @@ pointer.
 
 Pointers in v0.1 can be:
 
-- Created with `&raw x` or `&raw mut x`.
-- Null.
-- Dereferenced with `*`.
-- Compared with `==` and `!=`.
-- Passed to functions and returned from functions.
+* Created with `&raw x` or `&raw mut x`.
+* Null.
+* Dereferenced with `*`.
+* Compared with `==` and `!=`.
+* Passed to functions and returned from functions.
 
 They cannot be offset, indexed, or incremented.
 
@@ -324,7 +324,7 @@ func read_maybe(p: *i32) -> bool {
 
 **The caller always writes the operator.** There is no implicit
 conversion that creates a reference or pointer from a value (the one
-exception is a method receiver; see `methods.md`):
+exception is a method receiver; see [methods.md](methods.md)):
 
 ```xe
 let a: i32 = 1;
@@ -390,14 +390,14 @@ v0.1 does not check this.
 
 Xenon v0.1 does **not** enforce memory safety at the compiler level:
 
-- References are not lifetime-checked. A `&T` may outlive the value it
+* References are not lifetime-checked. A `&T` may outlive the value it
   refers to.
-- Dangling references and pointers are possible.
-- Null dereference is possible through pointers.
-- Dereferencing a dangling or null pointer is undefined behavior.
+* Dangling references and pointers are possible.
+* Null dereference is possible through pointers.
+* Dereferencing a dangling or null pointer is undefined behavior.
 
 Dangling-reference detection is deferred to a later semantic-analysis
 iteration (v0.2).
 
 The one check that is always performed is **array bounds checking** (see
-`types.md` §3.1 and `expressions.md` §2.4).
+[types.md](types.md) §3.1 and [expressions.md](expressions.md) §2.4).

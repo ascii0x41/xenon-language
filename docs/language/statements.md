@@ -8,24 +8,24 @@ block is a sequence of statements.
 Most of the language is expressions; statements are a thin layer on
 top. This document specifies:
 
-- Statement kinds.
-- Blocks and scoping.
-- Control flow: `if`, `while`, `return`, `break`, `continue`.
-- The expression/statement distinction.
+* Statement kinds.
+* Blocks and scoping.
+* Control flow: `if`, `while`, `return`, `break`, `continue`.
+* The expression/statement distinction.
 
 ## 2. Statement kinds
 
 Xenon has the following statements:
 
-- **Let binding:** `let x = expr;`
-- **Expression statement:** `expr;`
-- **Assignment:** `lvalue = expr;`
-- **Block:** `{ stmt* }`
-- **If:** `if cond { ... } else if cond { ... } else { ... }`
-- **While:** `while cond { ... }`
-- **Return:** `return expr?;`
-- **Break:** `break;`
-- **Continue:** `continue;`
+* **Let binding:** `let x = expr;`
+* **Expression statement:** `expr;`
+* **Assignment:** `lvalue = expr;`
+* **Block:** `{ stmt* }`
+* **If:** `if cond { ... } else if cond { ... } else { ... }`
+* **While:** `while cond { ... }`
+* **Return:** `return expr?;`
+* **Break:** `break;`
+* **Continue:** `continue;`
 
 > **Open question:** `break` and `continue` are not exercised in
 > `syntax.txt`. Confirm they are part of the v0.1 grammar.
@@ -58,9 +58,9 @@ until the end of the block:
 
 Blocks can appear as:
 
-- The body of a function.
-- The body of a control-flow statement.
-- A standalone statement.
+* The body of a function.
+* The body of a control-flow statement.
+* A standalone statement.
 
 A block is a **statement**, not an expression. It does not produce a
 value. The last expression in a block is not the block's value.
@@ -80,7 +80,7 @@ has one, is discarded, except for its side effects.
 
 An expression of type `void` (a call to a function returning `void`, or
 an assignment) is a valid expression statement. It is only an error in
-*value* position (see `expressions.md` §2.3).
+*value* position (see [expressions.md](expressions.md) §2.3).
 
 ## 5. `if` statements
 
@@ -126,7 +126,7 @@ and cannot appear on the right of `let`:
 let x = if cond { 1 } else { 2 };   // error: if is not an expression
 ```
 
-To select a value, use the ternary operator (`expressions.md` §2.5):
+To select a value, use the ternary operator ([expressions.md](expressions.md) §2.5):
 
 ```xe
 let x = cond ? 1 : 2;
@@ -262,12 +262,12 @@ does not produce a value; an expression does.
 
 Statements that contain expressions:
 
-- `let x = expr;`
-- `expr;`
-- `lvalue = expr;`
-- `return expr;`
-- `if expr { ... }`
-- `while expr { ... }`
+* `let x = expr;`
+* `expr;`
+* `lvalue = expr;`
+* `return expr;`
+* `if expr { ... }`
+* `while expr { ... }`
 
 In each case, the expression is evaluated, and its value is used by
 the statement.
@@ -277,13 +277,13 @@ conditional is the ternary operator.
 
 ## 11. Summary
 
-- Statements are: `let`, expression statements, assignments, blocks,
+* Statements are: `let`, expression statements, assignments, blocks,
   `if` (with `else if` / `else`), `while`, `return`, `break`,
   `continue`.
-- Braces are required around all control-flow bodies.
-- No single-statement `if` or `while`.
-- `if` and blocks are statements, not expressions.
-- `while` has no `else`.
-- There is no `for` in v0.1.
-- `break` and `continue` are unlabeled.
-- A non-`void` function must return on every path.
+* Braces are required around all control-flow bodies.
+* No single-statement `if` or `while`.
+* `if` and blocks are statements, not expressions.
+* `while` has no `else`.
+* There is no `for` in v0.1.
+* `break` and `continue` are unlabeled.
+* A non-`void` function must return on every path.
