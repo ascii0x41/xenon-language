@@ -29,7 +29,7 @@ References are not lifetime-checked. This is planned for a future version.
 | Semantic analyser   | In progress    |
 | Code generator      | Not started    |
 
-## Quick Start
+## Getting Started With Xenon
 
 ### Requirements
 
@@ -51,10 +51,25 @@ This produces the compiler executable `xec` that is now usable in the terminal
 ### Run the compiler help
 
 ```bash
-xec --help
+xec help
 ``` 
 
-## Usage
+### Creating Your First Project
+
+```bash
+xec init
+```
+
+This produces a `xenon.toml` file and a `src/main.xe` source file.
+For more about `xenon.toml`, see [xenon-toml.md](docs/compiler/xenon-toml.md)
+
+### Compiling Your Project
+
+```bash
+xec build
+```
+
+This produces an executable in the `binary` directory/folder.
 
 Xenon currently supports:
 - `xec build` – validate a project using `xenon.toml`
@@ -68,11 +83,11 @@ For a step-by-step introduction, see [Getting Started](docs/getting-started.md).
 
 ## Documentation Roadmap
 
-The documentation is organized to guide compiler development, especially the semantic analyser:
+The documentation is organised to guide compiler development, especially the language semantics:
 
-- [Language overview](docs/language/overview.md) — goals, philosophy, and the mental model of the language.
-- [Language reference](docs/language/) — lexical structure, types, variables, expressions, statements, functions, methods, operators, modules, and diagnostics.
-- [Compiler documentation](docs/compiler/) — architecture, parsing, semantic analysis, type system, and code generation.
+- [Language overview](docs/language/overview.md): goals, philosophy, and the mental model of the language.
+- [Language reference](docs/language/): lexical structure, types, variables, expressions, statements, functions, methods, operators, modules, and diagnostics.
+- [Compiler documentation](docs/compiler/): architecture, parsing, semantic analysis, type system, and code generation.
 
 These pages are intentionally written as a starting point that can evolve into the definitive design and implementation reference for the compiler.
 

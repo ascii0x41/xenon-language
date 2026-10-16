@@ -26,7 +26,7 @@ impl Point {
 An `impl` block contains:
 
 * Methods (functions with a `self` receiver).
-* Static functions (`static func`).
+* Static functions (no receiver).
 * Static variables (`static let`).
 
 An `impl` block has no visibility of its own. Each member declares its
@@ -34,12 +34,16 @@ own visibility with `pub` (see [modules.md](modules.md) §4.3).
 
 ## 3. Methods
 
-A **method** is a function in an `impl` block whose first parameter is a `self` receiver. There are two receiver forms:
+A **method** is a function in an `impl` block whose first parameter is a `self` receiver. A missing receiver means the function is a static method.
 
-| Receiver    | Meaning                                   |
-| ----------- | ----------------------------------------- |
-| `&self`     | Receiver is passed by immutable reference |
-| `&mut self` | Receiver is passed by mutable reference   |
+Supported receiver forms:
+
+| Receiver       | Meaning                                   |
+| -------------- | ----------------------------------------- |
+| `self`         | Receiver is passed by value               |
+| `mut self`     | Receiver is passed by value and is mutable |
+| `&self`        | Receiver is passed by immutable reference  |
+| `&mut self`    | Receiver is passed by mutable reference    |
 
 ```xe
 type Point {
@@ -48,6 +52,11 @@ type Point {
 }
 
 impl Point {
+    pub func translate(self, dx: f64, dy: f64) {
+        self.x += dx;
+        self.y += dy;
+    }
+
     pub func transpose(&mut self, other: &Point) {
         self.x += other.x;
         self.y += other.y;
@@ -61,22 +70,22 @@ impl Point {
 
 `self` has a special meaning only in method declarations and method bodies. It cannot be used as the name of an ordinary function parameter.
 
-The receiver's underlying type is the type being implemented: in `impl Point`, `&self` means `&Point`, and `&mut self` means `&mut Point`.
+The receiver's underlying type is the type being implemented: in `impl Point`, `self` means `Point`, `&self` means `&Point`, and `&mut self` means `&mut Point`.
 
-Inside a method body, `self` is a reference and follows the ordinary reference rules. Field access automatically dereferences it, so `self.x` accesses the field directly. See [references-and-pointers.md](references-and-pointers.md) §2.2.
+Inside a method body, `self` follows the ordinary value/reference rules for that receiver form. Field access automatically dereferences it, so `self.x` accesses the field directly. See [references-and-pointers.md](references-and-pointers.md) §2.2.
 
 
 ## 4. Static functions and variables
 
-A **static function** has no receiver. It belongs to the type and is called through the type's name:
+A **static function** has no receiver, so it is declared without a `self` receiver and without the `static` keyword. It belongs to the type and is called through the type's name:
 
 ```xe
 impl Point {
-    pub static func init(x: f64, y: f64) -> Point {
+    pub func init(x: f64, y: f64) -> Point {
         return Point { x, y };
     }
 
-    pub static func origin() -> Point {
+    pub func origin() -> Point {
         return Point { 0.0, 0.0 };
     }
 }

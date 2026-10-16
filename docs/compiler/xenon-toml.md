@@ -21,21 +21,27 @@ Example:
 
 ```toml
 [project]
-name = "hello"
+name = "my_project"
 version = "0.1.0"
-entry = "src/main.xe"
 authors = ["Your Name"]
+
+source_files = [
+    "src/main.xe",
+]
+
+[build]
+output = "build/"
+target = "x86_64-linux"
+optimisation = "debug"
 ```
 
 ## Optional build configuration
 
 ### `[build]`
 
-Optional keys:
-
-* `output` — output directory for build artifacts. Defaults to `build/`.
 * `target` — target triple, e.g. `x86_64-linux`.
-* `optimisation` — `none`, `debug`, or `release`.
+* `output` — output directory for build artifacts. Defaults to `build/. (**Optional**)
+* `optimisation` — `none`, `debug`, or `release`. (**Optional**)
 
 Example:
 

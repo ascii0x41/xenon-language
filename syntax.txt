@@ -28,28 +28,28 @@ type Point {
 }
 
 impl Point {
-    // Static constructor
-    pub static func init(x: i32, y: i32) -> Point {
+    // Static constructor: no receiver, no 'static' keyword
+    pub func init(x: i32, y: i32) -> Point {
         return Point { x, y };
     }
 
-    // Static factory
-    pub static func origin() -> Point {
+    // Static factory: no receiver, no 'static' keyword
+    pub func origin() -> Point {
         return Point { 0, 0 };
     }
 
-    // Immutable-reference method
+    // Immutable-reference instance method
     pub func magnitude(&self) -> f64 {
         return math::sqrt((self.x * self.x + self.y * self.y));
     }
 
-    // Mutable-reference method
+    // Mutable-reference instance method
     pub func translate(&mut self, dx: i32, dy: i32) {
         self.x += dx;
         self.y += dy;
     }
 
-    // By-value method
+    // By-value instance method
     pub func get_x(self) -> i32 {
         return self.x;
     }
@@ -73,7 +73,7 @@ impl Counter {
     pub static let MAX: i32 = 100;
     pub static let mut total: i32 = 0;
 
-    pub static func init() -> Counter {
+    pub func init() -> Counter {
         return Counter { 0 };
     }
 

@@ -150,7 +150,7 @@ namespace xenon::parser {
         StructFieldDeclPtr parse_struct_field_declaration(bool is_public = false);
         MethodDeclPtr parse_method_declaration(bool is_public = false, bool is_static = false);
         MethodDeclPtr parse_method_declaration(bool is_public = false, bool is_static = false, const ast::Name* impl_type = nullptr);
-        std::vector<VariableDeclPtr> parse_method_parameters(const ast::Name* impl_type);
+        std::pair<std::optional<SelfReceiver>, std::vector<VariableDeclPtr>> parse_method_parameters(const ast::Name* impl_type);
 
         StructDeclPtr parse_struct_declaration(bool is_public = false);
         ImplDeclPtr parse_impl_declaration();

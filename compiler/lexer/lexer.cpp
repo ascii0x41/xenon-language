@@ -255,8 +255,8 @@ namespace xenon::lexer {
                 throw CompilerException(std::format("Unknown integer suffix '{}'", suffix), loc());
             }
         } else {
-            // Pointer-sized integer suffix: size
-            match_word("size");
+            // Pointer-sized integer suffix: usize
+            match_word("usize");
         }
 
         // Emit the appropriate token

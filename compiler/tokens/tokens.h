@@ -173,7 +173,7 @@ namespace xenon::tokens {
         "u16",
         "u32",
         "u64",
-        "size",
+        "usize",
     };
 
     inline const std::unordered_set<std::string> FLOATING_POINT_SUFFIXES = {

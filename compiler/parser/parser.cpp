@@ -163,11 +163,15 @@ namespace xenon::parser {
     NamePtr Parser::parse_name() {
         bool is_global = accept(TokenType::COLON_COLON);
 
-        if (!check(TokenType::IDENTIFIER)) {
+        if (!check(TokenType::IDENTIFIER) && !check(TokenType::SELF)) {
             if (is_global) {
                 throw CompilerException("Expected identifier after leading '::' in name", peek().location, Severity::ERROR);
             }
             throw CompilerException("Expected identifier for name", peek().location, Severity::ERROR);
+        }
+
+        if (is_global && check(TokenType::SELF)) {
+            throw CompilerException("'self' cannot be used after a leading '::' in a name", peek().location, Severity::ERROR);
         }
 
         auto name = std::make_unique<Name>(loc(), peek().lexeme, nullptr, is_global);
@@ -175,8 +179,14 @@ namespace xenon::parser {
 
         Name* tail = name.get();
         while (match(TokenType::COLON_COLON)) {
-            if (!check(TokenType::IDENTIFIER)) {
+            if (tail->identifier == "self") {
+                throw CompilerException("'self' cannot be used as the base of a qualified name", previous().location, Severity::ERROR);
+            }
+            if (!check(TokenType::IDENTIFIER) && !check(TokenType::SELF)) {
                 throw CompilerException("Expected identifier after '::' in qualified name", peek().location, Severity::ERROR);
+            }
+            if (check(TokenType::SELF)) {
+                throw CompilerException("'self' cannot appear after '::' in a qualified name", peek().location, Severity::ERROR);
             }
 
             auto next_name = std::make_unique<Name>(loc(), peek().lexeme);
@@ -271,7 +281,8 @@ namespace xenon::parser {
         return params;
     }
 
-    std::vector<VariableDeclPtr> Parser::parse_method_parameters(const ast::Name* impl_type) {
+    std::pair<std::optional<SelfReceiver>, std::vector<VariableDeclPtr>> Parser::parse_method_parameters(const ast::Name* impl_type) {
+        std::optional<SelfReceiver> receiver;
         std::vector<VariableDeclPtr> params;
 
         expect(TokenType::LPAREN, "Expected '(' to start parameter list");
@@ -280,22 +291,33 @@ namespace xenon::parser {
             bool first = true;
             do {
                 SourceLocation param_loc = loc();
-                // If this is the first parameter and it's a receiver form, handle specially.
-                if (first && check(TokenType::AMP)) {
-                    // &self or &mut self
-                    advance();
-                    bool is_mut = accept(TokenType::MUT);
-                    auto name_tok = expect(TokenType::SELF, "Expected 'self' after '&' in method receiver");
-                    TypeExprPtr type_expr = nullptr;
-                    if (impl_type) {
-                        type_expr = std::make_unique<ReferenceTypeExpr>(param_loc, std::make_unique<NamedTypeExpr>(param_loc, clone_name(impl_type)), is_mut);
+
+                if (first) {
+                    if (check(TokenType::AMP)) {
+                        advance();
+                        bool is_mut = accept(TokenType::MUT);
+                        expect(TokenType::SELF, "Expected 'self' after '&' in method receiver");
+                        receiver = SelfReceiver{SelfReceiverType::REFERENCE, is_mut};
+                        first = false;
+                        continue;
                     }
-                    params.push_back(std::make_unique<VariableDecl>(param_loc, std::string("self"), std::move(type_expr), nullptr, false));
-                    first = false;
-                    continue;
+
+                    if (check(TokenType::MUT) && peek_next().type == TokenType::SELF) {
+                        advance();
+                        expect(TokenType::SELF, "Expected 'self' after 'mut' in method receiver");
+                        receiver = SelfReceiver{SelfReceiverType::VALUE, true};
+                        first = false;
+                        continue;
+                    }
+
+                    if (check(TokenType::SELF) && (current_ + 1 >= tokens_.size() || tokens_[current_ + 1].type != TokenType::COLON)) {
+                        advance();
+                        receiver = SelfReceiver{SelfReceiverType::VALUE, false};
+                        first = false;
+                        continue;
+                    }
                 }
 
-                // Fallback to normal parameter grammar
                 bool mut = accept(TokenType::MUT);
                 auto name = expect(TokenType::IDENTIFIER, "Expected parameter name in parameter list").lexeme;
                 TypeExprPtr type_expr = nullptr;
@@ -308,7 +330,7 @@ namespace xenon::parser {
         }
 
         expect(TokenType::RPAREN, "Expected ')' after parameter list");
-        return params;
+        return std::make_pair(std::move(receiver), std::move(params));
     }
 
 
@@ -974,10 +996,10 @@ namespace xenon::parser {
         SourceLocation l = loc();
         expect(TokenType::FUNC, "Expected 'func' keyword");
         auto name = expect(TokenType::IDENTIFIER, "Expected method name after 'func'").lexeme;
-        auto params = parse_method_parameters(impl_type);
+        auto [receiver, params] = parse_method_parameters(impl_type);
         auto return_type = parse_return_type();
         auto body = parse_optional_body();
-        return std::make_unique<MethodDecl>(l, std::move(name), std::move(params), std::move(return_type), std::move(body), is_public, is_static);
+        return std::make_unique<MethodDecl>(l, std::move(name), std::move(receiver), std::move(params), std::move(return_type), std::move(body), is_public);
     }
 
     // type <name> { [pub] field: T; ... }
@@ -1021,6 +1043,7 @@ namespace xenon::parser {
 
         std::vector<VariableDeclPtr> static_vars;
         std::vector<MethodDeclPtr> methods;
+        std::unordered_set<std::string> method_names;
 
         while (!check(TokenType::RBRACE) && !is_at_end()) {
             Metadata meta = parse_metadata();
@@ -1030,10 +1053,10 @@ namespace xenon::parser {
             }
 
             bool member_public = match(TokenType::PUB);
-            bool is_static = match(TokenType::STATIC);
+            bool is_static_member = match(TokenType::STATIC);
 
             if (check(TokenType::LET)) {
-                if (!is_static) {
+                if (!is_static_member) {
                     throw CompilerException(
                         "Expected 'static' before variable declaration in impl block",
                         peek().location, Severity::ERROR);
@@ -1045,7 +1068,18 @@ namespace xenon::parser {
             }
 
             if (check(TokenType::FUNC)) {
-                auto method = parse_method_declaration(member_public, is_static, type_name.get());
+                if (is_static_member) {
+                    throw CompilerException(
+                        "Methods do not use the 'static' keyword; omit the receiver to make a method static",
+                        previous().location, Severity::ERROR);
+                }
+                auto method = parse_method_declaration(member_public, false, type_name.get());
+                if (!method_names.insert(method->name).second) {
+                    throw CompilerException(
+                        std::format("Method '{}' is already declared in impl '{}'", method->name, type_name->to_string()),
+                        method->location,
+                        Severity::ERROR);
+                }
                 attach_metadata(*method, std::move(meta));
                 methods.push_back(std::move(method));
                 continue;

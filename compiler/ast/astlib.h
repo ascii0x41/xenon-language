@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 #include <string>
 #include <ostream>
@@ -538,24 +539,34 @@ namespace xenon::ast {
     using StructFieldDeclPtr = std::unique_ptr<StructFieldDecl>;
 
 
+    enum class SelfReceiverType {
+        VALUE,
+        REFERENCE,
+    };
+
+    struct SelfReceiver {
+        SelfReceiverType type;
+        bool is_mut;
+    };
+
     // A function inside an `impl` block.
     struct MethodDecl : public Declaration {
         std::string name;
+        std::optional<SelfReceiver> receiver;
         std::vector<VariableDeclPtr> parameters;
         TypeExprPtr return_type;
         BlockPtr body;
         bool is_public;
-        bool is_static;
         MethodDecl(SourceLocation l, std::string n,
-                   std::vector<VariableDeclPtr> params,
+                   std::optional<SelfReceiver> r = std::nullopt,
+                   std::vector<VariableDeclPtr> params = {},
                    TypeExprPtr ret_type = nullptr,
                    BlockPtr b = nullptr,
-                   bool p = false,
-                   bool s = false)
+                   bool p = false)
             : Declaration(NodeKind::METHOD_DECL, std::move(l)),
-            name(std::move(n)), parameters(std::move(params)),
+            name(std::move(n)), receiver(std::move(r)), parameters(std::move(params)),
             return_type(std::move(ret_type)), body(std::move(b)),
-            is_public(p), is_static(s) {}
+            is_public(p) {}
     };
 
     using MethodDeclPtr = std::unique_ptr<MethodDecl>;
