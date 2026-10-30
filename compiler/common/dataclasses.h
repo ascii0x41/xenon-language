@@ -2,9 +2,7 @@
 
 #include <string>
 #include <vector>
-#include <memory>
 #include <filesystem>
-#include <unordered_map>
 #include <optional>
 #include <format>
 #include <cctype>
@@ -123,46 +121,61 @@ namespace xenon::config {
     };
 
     // ============================================
-    // ONE config struct
+    // Configuration stages
     // ============================================
-    
-    struct CompilerConfig {
-        // ---- From xenon.toml ----
+
+    struct TomlSettings {
+        std::optional<std::string> project_name;
+        std::optional<std::string> version;
+        std::optional<std::vector<std::string>> authors;
+        std::optional<std::vector<std::string>> source_files;
+
+        std::optional<fs::path> output_dir;
+        std::optional<std::string> target_triple;
+        std::optional<OptimisationLevel> optimisation;
+        std::optional<WarningLevel> warning;
+    };
+
+    struct CLIOverrides {
+        Command command = Command::BUILD;
+        std::optional<std::string> output_name;
+        std::optional<fs::path> output_dir;
+        std::optional<std::string> target_triple;
+        std::optional<OptimisationLevel> optimisation;
+        std::optional<WarningLevel> warning;
+        std::optional<bool> dump_tokens;
+        std::optional<bool> dump_ast;
+        std::optional<bool> no_colour;
+        std::optional<bool> verbose;
+    };
+
+    struct ResolvedConfig {
+        // Required project metadata
         std::string project_name;
         std::string version = "0.1.0";
-        std::vector<std::string> source_files; // relative to project root
         std::vector<std::string> authors;
-        
-        // ---- From TOML or CLI ----
+
+        // Resolved project layout
+        fs::path project_root;
+        std::vector<fs::path> source_paths;
+
+        // Final build settings
         fs::path output_dir = "build/";
-        std::string output_name;        // derived from project_name if empty; empty is unambiguous, no flag needed
+        std::string output_name;
         std::string target_triple;
         TargetInfo target_info{TargetType::X86_64_LINUX, "x86_64-pc-linux-gnu"};
-        OptimisationLevel opt_level = OptimisationLevel::DEBUG;
-        WarningLevel warning_level = WarningLevel::WARN;
+        OptimisationLevel optimisation = OptimisationLevel::DEBUG;
+        WarningLevel warning = WarningLevel::WARN;
 
-        // Set by the CLI arg parser when the corresponding flag is actually
-        // passed on the command line. Needed because these fields have
-        // non-empty/non-zero defaults, so "value equals the default" can't be
-        // used to tell "user didn't pass this flag" apart from "user passed
-        // this flag with the default value" — the driver's TOML/CLI merge
-        // needs the real answer to decide whether to let TOML override it.
-        bool output_dir_explicit = false;
-        bool target_triple_explicit = false;
-        bool opt_level_explicit = false;
-        bool warning_level_explicit = false;
-        
-        // ---- CLI only ----
+        // CLI-only runtime flags
         Command command = Command::BUILD;
         bool dump_tokens = false;
         bool dump_ast = false;
         bool no_colour = false;
         bool verbose = false;
-        
-        // ---- Resolved (set during load) ----
-        fs::path project_root;
-        std::vector<fs::path> source_paths;   // absolute resolved paths
     };
+
+    using CompilerConfig = ResolvedConfig;
 
     // Parsers (keep these)
     inline OptimisationLevel parse_opt_level(const std::string& s) {

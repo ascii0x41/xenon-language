@@ -18,8 +18,7 @@
 // ------------------------------------------------------------
 
 /*
-    Abort the program with a message printed to stderr, then
-    exit with status 101. Never returns.
+    Abort the program with a message printed to stderr, then exit with status 101. Never returns.
    
     The `noreturn` attribute tells the type checker that control
     flow does not continue past a call to `panic`, so patterns

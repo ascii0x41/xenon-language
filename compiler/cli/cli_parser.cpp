@@ -6,7 +6,7 @@
 
 namespace xenon::cli {
 
-using config::CompilerConfig;
+using config::CLIOverrides;
 using config::Command;
 using config::OptimisationLevel;
 using config::WarningLevel;
@@ -27,9 +27,8 @@ Options:
   --version              Show version information
   -o, --output <name>    Set output binary name
   --target <triple>      Set compilation target triple
-  --O0                   No optimizations 
-  --O1, --debug          Debug build (default)
-  --O2, --release        Release build with optimizations
+  --debug                Debug build (default)
+  --release              Release build with optimizations
   --W0                   Ignore warnings
   --W1                   Show warnings (default)
   --W2                   Treat warnings as errors
@@ -46,12 +45,11 @@ Examples:
   xec check                        Check the entire project
   xec init                         Create a new project
   xec build --release -o myapp     Custom output name
-  xec build -Wno-unused-var        Ignore unused variable warnings
 )";
 }
 
-    CompilerConfig parse_cli(int argc, char* argv[]) {
-        CompilerConfig config;
+    CLIOverrides parse_cli(int argc, char* argv[]) {
+        CLIOverrides config;
 
         // No arguments = help
         if (argc < 2) {
@@ -98,17 +96,17 @@ Examples:
             } else if (arg == "--dump-ast") {
                 config.dump_ast = true;
             } else if (arg == "-W0") {
-                config.warning_level = WarningLevel::IGNORE;
+                config.warning = WarningLevel::IGNORE;
             } else if (arg == "-W1") {
-                config.warning_level = WarningLevel::WARN;
+                config.warning = WarningLevel::WARN;
             } else if (arg == "-W2") {
-                config.warning_level = WarningLevel::ERROR;
+                config.warning = WarningLevel::ERROR;
             } else if (arg == "-O0") {
-                config.opt_level = OptimisationLevel::NONE;
+                config.optimisation = OptimisationLevel::NONE;
             } else if (arg == "--debug" || arg == "-O1") {
-                config.opt_level = OptimisationLevel::DEBUG;
+                config.optimisation = OptimisationLevel::DEBUG;
             } else if (arg == "--release" || arg == "-O2") {
-                config.opt_level = OptimisationLevel::RELEASE;
+                config.optimisation = OptimisationLevel::RELEASE;
             } else if (arg == "-o" || arg == "--output") {
                 if (i + 1 < argc) {
                     config.output_name = argv[++i];
@@ -119,7 +117,6 @@ Examples:
             } else if (arg == "--target") {
                 if (i + 1 < argc) {
                     config.target_triple = argv[++i];
-                    config.target_triple_explicit = true;
                 } else {
                     std::cerr << "Error: --target requires a value\n";
                     std::exit(1);

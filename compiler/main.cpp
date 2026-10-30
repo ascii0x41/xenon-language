@@ -1,5 +1,5 @@
 #include "cli/cli_parser.h"
-#include "driver/compiler_driver.h"
+#include "compiler.h"
 #include "common/diagnostics.h"
 
 #define XENON_COMPILER_VERSION \
@@ -16,35 +16,30 @@
 using namespace xenon;
 
 int main(int argc, char** argv) {
-    // Declared outside the try block (rather than defaulted in-place)
-    // so the catch block below can still read opts.no_colour even if
-    // the exception is thrown after CLI parsing succeeded. If
-    // cli::parse_cli itself throws, no_colour just stays at its
-    // CompilerConfig default.
-    config::CompilerConfig opts;
+    config::CLIOverrides cli_overrides;
 
     try {
         // 1. Parse CLI
-        opts = cli::parse_cli(argc, argv);
+        cli_overrides = cli::parse_cli(argc, argv);
 
         // 2. Handle HELP/VERSION/INIT (early exit)
-        if (opts.command == config::Command::HELP) {
+        if (cli_overrides.command == config::Command::HELP) {
             cli::print_usage();
             return 0;
         }
-        if (opts.command == config::Command::VERSION) {
+        if (cli_overrides.command == config::Command::VERSION) {
             std::cout << XENON_COMPILER_VERSION << std::endl;
             return 0;
         }
-        if (opts.command == config::Command::INIT) {
-            return driver::Driver::init_project();
+        if (cli_overrides.command == config::Command::INIT) {
+            return xenon::compiler::Compiler::init_project();
         }
 
         // 3. Run (internally loads config and routes to build/check)
-        driver::Driver::run_compiler(opts);
+        xenon::compiler::Compiler::run_compiler(cli_overrides);
 
         // 4. Exit
-        return g_diagnostics.exit_gracefully(!opts.no_colour);
+        return g_diagnostics.exit_gracefully(!cli_overrides.no_colour.value_or(false));
 
     } catch (const CompilerException& e) {
         // Fatal/unrecoverable driver errors (missing xenon.toml, missing
@@ -58,10 +53,7 @@ int main(int argc, char** argv) {
         } else {
             g_diagnostics.error(e.message, e.location);
         }
-        return g_diagnostics.exit_gracefully(!opts.no_colour);
- 
-
-
+        return g_diagnostics.exit_gracefully(!cli_overrides.no_colour.value_or(false));
     } catch (const std::exception& e) {
         std::cerr << "internal compiler error: " << e.what() << "\n";
         return 1;

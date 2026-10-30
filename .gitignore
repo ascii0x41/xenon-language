@@ -6,7 +6,6 @@ build/
 .trash/
 .test_results/
 .vscode/
-.cursor/
 .idea/
 .cache/
 .temp/
@@ -30,3 +29,4 @@ venv/
 examples/
 docs/compiler
 *.old
+.clangd

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/dataclasses.h"
-#include "driver/compiler_driver.h"
+#include "compiler.h"
 #include "semantic/types.h"
 #include "semantic/scope.h"
 
@@ -28,7 +28,7 @@ namespace xenon::semantic {
 
     class SemanticAnalyser {
         const driver::ModuleNamespaceTree& namespace_tree_;
-        const config::CompilerConfig& options_;
+        const config::ResolvedConfig& options_;
         TypeRegistry type_registry_;
         Scope global_scope_;
         Scope* current_scope_ = nullptr;
@@ -50,7 +50,7 @@ namespace xenon::semantic {
         // TypeRegistry owns the Types it hands out as raw pointers.
         std::vector<std::unique_ptr<Symbol>> symbols_;
 
-        SemanticAnalyser(const driver::ModuleNamespaceTree& namespace_tree, const config::CompilerConfig& options);
+        SemanticAnalyser(const driver::ModuleNamespaceTree& namespace_tree, const config::ResolvedConfig& options);
         void warn(const std::string& message, const SourceLocation& loc) const;
         void error(const std::string& message, const SourceLocation& loc) const;
         Scope* module_scope_for_name(const std::string& name, const driver::Module& module);
@@ -125,7 +125,7 @@ namespace xenon::semantic {
 
     public:
         static bool validate(const driver::ModuleNamespaceTree& namespace_tree,
-            const config::CompilerConfig& options);
+            const config::ResolvedConfig& options);
 
         bool validate_modules();
     };

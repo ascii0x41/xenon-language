@@ -8,12 +8,12 @@
 
 namespace xenon::cli {
     
-    using config::CompilerConfig;
+    using config::CLIOverrides;
     using config::Command;
     using config::OptimisationLevel;
     using config::WarningLevel;
 
     void print_usage();
 
-    CompilerConfig parse_cli(int argc, char* argv[]);
+    CLIOverrides parse_cli(int argc, char* argv[]);
 }

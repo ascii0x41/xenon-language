@@ -3,7 +3,7 @@
 
 namespace xenon::semantic {
 
-    SemanticAnalyser::SemanticAnalyser(const driver::ModuleNamespaceTree& namespace_tree, const config::CompilerConfig& options)
+    SemanticAnalyser::SemanticAnalyser(const driver::ModuleNamespaceTree& namespace_tree, const config::ResolvedConfig& options)
         : namespace_tree_(namespace_tree), options_(options), type_registry_(), global_scope_("global") {
         (void)namespace_tree;
 
@@ -38,7 +38,7 @@ namespace xenon::semantic {
     }
 
     void SemanticAnalyser::warn(const std::string& message, const SourceLocation& loc) const {
-        if (options_.warning_level == WarningLevel::ERROR) {
+        if (options_.warning == WarningLevel::ERROR) {
             g_diagnostics.error(message, loc);
         } else {
             g_diagnostics.warning(message, loc);
@@ -2189,7 +2189,7 @@ namespace xenon::semantic {
     }
 
     bool SemanticAnalyser::validate(const driver::ModuleNamespaceTree& namespace_tree,
-        const config::CompilerConfig& options) {
+        const config::ResolvedConfig& options) {
         return SemanticAnalyser(namespace_tree, options).validate_modules();
     }
 
