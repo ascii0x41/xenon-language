@@ -50,7 +50,7 @@
 * [x] `str`
 * [x] `nulltype`
 * [x] `nullptr`
-* [x] Fixed-size arrays `[T; N]`
+* [x] Fixed-size arrays `[N]T` (length first: `[2][3]f64` indexes as `a[i][j]`)
 * [x] Struct types via `type`
 
 ```xenon
@@ -143,8 +143,8 @@ Point { 1.0, 2.0 }
 
 ### Arrays
 
-* [x] Fixed-size arrays `[T; N]`
-* [x] Array literals
+* [x] Fixed-size arrays `[N]T` (length first: `[2][3]f64` indexes as `a[i][j]`)
+* [x] Array literals (list form only; the element type comes from the annotation or defaulting; no typed literal)
 * [x] Bounds-checked indexing
 * [x] Array indices range from `0` through `N - 1`
 * [x] `N` must be greater than zero
@@ -163,13 +163,19 @@ Point { 1.0, 2.0 }
 * [ ] Final project/file-system module mapping (decided: `source_files` list in `xenon.toml`, name from the `module` declaration; write into `modules.md`)
 * [ ] Duplicate module names are an error
 * [ ] Importing a namespace prefix that no file declares is an error
-* [ ] Exactly one `main` module
+* [ ] Every function in the environment's `required_functions` exists and matches its signature (replaces "exactly one `main` module")
 * [ ] Imports are referred to by full path (`utils::helpers::f()`)
+* [ ] Standard-library modules are discovered from `<installation>/stdlib/*/module.toml` and parsed only when imported
+* [ ] A user module named like a standard-library module is an error (recommended; see open decisions)
+* [ ] `module <name>;` is optional: a file without one contributes its declarations to the global scope (like `runtime.xe`)
+* [ ] Leading `::` paths (`::say`) refer to the global scope; lookup order is local scopes, current module, then global scope (parser: `Path` gets a global flag)
+* [ ] Global-scope corner cases: privacy of non-`pub` items, imports in global files, redeclaration rules (recommendations in `DOCS-TODO.md`)
 
 ### Annotations and Documentation
 
 * [x] `#[extern(...)]`
 * [x] `#[noreturn]`
+* [ ] `#[require_capability("name")]` on functions and modules (checked after overload resolution; unknown names are errors)
 * [x] `///` documentation comments
 
 ### Numeric Semantics
@@ -197,19 +203,41 @@ Point { 1.0, 2.0 }
 * [x] `panic`
 * [ ] Fully document panic semantics (decided: message to stderr, exit code 101, never returns; write into `runtime.md`)
 * [ ] `assert(condition, message)` and `exit(code)`
-* [ ] `println` takes only `str`; runtime items are in scope in every module
-* [ ] Xenon exit code standard
+* [ ] `println` takes only `str`; runtime items are in scope in every module (each environment target supplies its own `runtime.xe`)
+* [ ] Xenon exit code standard (hosted environments only)
 * [ ] Dangling-reference detection deferred to v0.2
 
-### Compiler and Docs (v0.1)
+### Toolchain (v0.1)
+
+* [ ] Six logical phases: preprocessing, parsing, pre-analysis, semantic analysis, code generation, linking
+* [ ] CLI `xec build <project>`: `CLIArgs` (`command`, `project_dir`, `target`, `environment`, `optimisation`, `output`)
+* [ ] `xenon.toml` loader: `ProjectConfig` with `[project]`, `[build]` and `[capabilities]`; omitted values preserved until resolution
+* [ ] `environment.toml` loader: `Environment`, `Target`, `required_functions`, capabilities, `configurable`. No `default_target`
+* [ ] Standard-library discovery from `<installation>/stdlib/*/module.toml`; parse a module's `.xe` only when it is imported
+* [ ] `ResolvedConfigs` resolver. Defaults: environment `xenon`, target required, optimisation `debug`, output `build/`. Capabilities are merged environment, then target, then project
+* [ ] `optimisation = "debug" | "release"` resolved into concrete settings (overflow checks, optimisation level)
+* [ ] Capabilities `fpu` and `heap_alloc` are metadata only in v1: merged into `ResolvedConfigs`, never checked
+* [ ] `#[require_capability]` parses as an ordinary annotation (including on modules) and is ignored in v1. Enforcement is future work
+* [ ] `required_functions`: each entry is the widest signature; the program's function may omit trailing parameters, nothing else may differ (omitted return type means `void`). Hosted `xenon`: `main::main(usize, *str) -> i32`
+* [ ] Emit required functions with C linkage as `<module>__<name>` (`main__main`); the C runtime always calls `main__main(argc, argv)`, so the compiler emits the full signature and ignores unused parameters
+* [ ] Hosted C entry builds the `argv` `str` array on its own stack (no heap, not UTF-8 validated)
+* [ ] Compile the environment target's C source and imported stdlib C sources for the selected target (requires Clang)
+* [ ] Link to ELF and apply the target's `linker_script`
+* [ ] `-lm`: stdlib `module.toml` `link_libs` (`math` names `m`), so `math` works on hosted `xenon` in the first release
+* [ ] Only the `xenon` environment is implemented in v1 (`caesium` is illustrative)
+* [ ] `math` as the only v1 standard-library module
+* [ ] Resolve the remaining open decisions in `DOCS-TODO.md`: global-scope corner cases, stdlib naming, C build defines and ABI, output layout
+
+### Compiler Internals (v0.1)
 
 * [ ] Rewrite the module system: a flat `ModuleGraph` keyed by declared name, no namespace tree
-* [ ] Resolve imports once into index edges. Report duplicates, unresolved imports (at the import's location), self-imports and cycles
+* [ ] Phase 3: duplicate module names, import resolution (report unresolved imports at the import's location, plus self-imports), dependency graph, Kahn's algorithm, cycle reporting
 * [ ] Traverse modules in dependency order for semantic analysis
-* [ ] Restructure the driver into stages: resolved config, parse, module graph, sema, codegen
+* [ ] Restructure the driver into the six phases
 * [ ] Remove the stale duplicate `compiler.cpp`
 * [ ] Lexer: reserve `raw`, and produce no `**` or `++` tokens
 * [ ] Write `lexical.md`
+* [ ] Write the new docs: pipeline, configuration, environments, standard library, capabilities
 
 ---
 
@@ -483,13 +511,13 @@ impl Point {
 
 ## Standard Library
 
-* [ ] `module.toml`
+* [ ] `module.toml` (full library manifest; v1 uses the minimal `stdlib/<name>/module.toml`)
 * [ ] Cross-platform IO abstraction
 * [ ] POSIX support
 * [ ] Windows support
 * [ ] `Inf`
 * [ ] `NaN`
-* [ ] `-lm` C interoperability where required
+* [ ] General C library linking beyond stdlib `link_libs` (v1 covers `math`'s `-lm`)
 
 ---
 
@@ -548,7 +576,7 @@ for i in 0..10 {
 * [ ] Generic type aliases
 
 ```xenon
-type Pair<T> = [T; 2];
+type Pair<T> = [2]T;
 ```
 
 * [ ] Associated types
@@ -579,8 +607,7 @@ type Pair<T> = [T; 2];
 ## Tooling
 
 * [ ] Package manager
-* [ ] Build system
-* [ ] `xec build <path-to-project>`
+* [ ] Build system (beyond `xec build`, which is v0.1)
 * [ ] LSP
 * [ ] Formatter (`xenonfmt`)
 * [ ] Documentation generator
@@ -612,3 +639,10 @@ type Pair<T> = [T; 2];
 * Assign-once initialisation of immutable bindings in v0.1 — needs path-sensitive analysis.
 * Lazy first-access initialisation of statics — static initialisers are literals in v0.1.
 * Mixing by-value and reference receivers under one method name.
+* Library manifests beyond the minimal stdlib `module.toml`, and dependency resolution, in v1.
+* A `LinkPlan` abstraction, a library registry class, and prebuilt object-file matrices in v1 — environment C sources are compiled at build time.
+* A separate target-triple parser — the target table holds the `llvm_triple` string.
+* Capability checking, negotiation and `#[require_capability]` enforcement in v1 — capabilities are metadata only.
+* A separate runtime-component system in v1.
+* Implementing environments other than `xenon` in v1 — `caesium` is illustrative.
+* UF2, hex and raw binary output in v1 — ELF only; flashing and conversion are external.

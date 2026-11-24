@@ -1,0 +1,530 @@
+(* ======================================================================
+   Xenon 0.1.3 - Grammar draft
+   ======================================================================
+
+   Notation
+     =        definition            |   alternation
+     [ x ]    optional              { x }   zero or more
+     ( x )    grouping              "x"     terminal
+     a .. b   character range       (* c *)  comment
+
+   Status tags used in comments
+     [DECIDED]      agreed in design discussion
+     [FROM SAMPLE]  inferred from the 0.1.3 sample file only
+     [PROVISIONAL]  not designed yet, placeholder so the grammar is complete
+     [OPEN]         a decision is needed before this can be final
+   ====================================================================== *)
+
+
+(* ----------------------------------------------------------------------
+   1. LEXICAL STRUCTURE
+   ---------------------------------------------------------------------- *)
+
+letter      = "A".."Z" | "a".."z" | "_" ;
+digit       = "0".."9" ;
+ident       = letter { letter | digit } ;          (* minus reserved words *)
+
+(* [DECIDED] A lone "_" is the wildcard token, NOT an identifier. "_x", "__"
+   and "_1" are ordinary identifiers. *)
+wildcard    = "_" ;
+
+(* Sigiled tokens. The sigil must be ADJACENT to the identifier: no whitespace.
+   [DECIDED] *)
+pct_ident   = "%" ident ;    (* "%Particle", "%x"                           *)
+ct_ident    = "$" ident ;    (* "$PI", "$ref", "$if"                        *)
+
+(* The lexer emits pct_ident as ONE token and does not decide what it means.
+   The parser decides by position:
+     - at the start of a type or primary  ->  a type name   (%Vector2 { ... })
+     - after a complete postfix expression -> a field access (a%position%x)
+   This works because "%" is never an infix operator: remainder is the
+   ordinary function mod(a, b), like sqrt. [DECIDED] *)
+
+(* Comments *)
+line_comment = "//" { any_char_except_newline } ;   (* [FROM SAMPLE] *)
+doc_comment = "//!" { any_char_except_newline } ;
+attribute_list = "$[" attribute { "," attribute } [ "," ] "]" ;
+attribute = ident [ "(" [ expr { "," expr } ] ")" ] ;
+
+(* Reserved words *)
+keyword     = "module" | "import" | "type" | "impl" | "func" | "let" | "static" | "const"
+            | "mut" | "auto" | "pub" | "self" | "return"
+            | "if" | "else" | "while" | "do" | "in" | "break" | "continue"
+            | "true" | "false" | "nullptr" ;
+
+(* Reserved compile-time words *)
+ct_keyword  = "$if" | "$else" ;
+
+(* Builtin type names are reserved words too. [DECIDED] *)
+builtin_type = "str" | "bool" | "rune" | "char"
+             | "u8" | "u16" | "u32" | "u64" | "usize"
+             | "i8" | "i16" | "i32" | "i64" | "isize"
+             | "f32" | "f64" ;
+
+(* Numeric literals *)
+dec_digits  = digit { digit | "_" } ;
+hex_digits  = ( digit | "a".."f" | "A".."F" ) { digit | "a".."f" | "A".."F" | "_" } ;
+bin_digits  = ( "0" | "1" ) { "0" | "1" | "_" } ;
+oct_digits  = "0".."7" { "0".."7" | "_" } ;
+
+int_suffix   = "u8" | "u16" | "u32" | "u64" | "usize"
+             | "i8" | "i16" | "i32" | "i64" | "isize" ;
+float_suffix = "f32" | "f64" ;
+
+int_lit     = ( dec_digits | "0x" hex_digits | "0b" bin_digits | "0o" oct_digits )
+              [ int_suffix ] ;
+
+(* A float needs digits on BOTH sides of the "." so that it can never be
+   confused with the "." path separator. "1." and ".5" are not floats. *)
+exponent    = ( "e" | "E" ) [ "+" | "-" ] dec_digits ;
+float_lit   = ( dec_digits "." dec_digits [ exponent ] | dec_digits exponent )
+              [ float_suffix ] ;
+
+(* IMPORTANT [DECIDED, from overload rule 2]: a literal WITHOUT a suffix is
+   marked "unsuffixed" in the token. The lexer/parser must never give it a
+   type. Types are assigned by overload resolution, with defaulting last.
+   Likewise "-literal" must stay visible as "negation applied directly to a
+   literal" (do not constant-fold it in the parser): overload rule 2 treats
+   "-literal" as a single literal for range checking. *)
+
+(* Text literals *)
+str_lit     = '"' { str_char | escape } '"' ;       (* type str, read-only view *)
+
+(* ONE character-literal form. [DECIDED; rune VARIABLE -> char is OPEN-B]
+   'a' is a rune (Unicode code point) by default. Like an unsuffixed integer
+   literal, it may adopt type char (C-style byte) during overload resolution
+   or initialization when its value fits in a byte. A rune VARIABLE does not
+   implicitly become a char, because that conversion can lose information. *)
+rune_lit    = "'" ( any_char | escape ) "'" ;
+escape      = "\" ( "n" | "r" | "t" | "0" | "\" | "'" | '"'
+                  | "x" hex_digits | "u{" hex_digits "}" ) ;
+literal     = int_lit | float_lit | str_lit | rune_lit
+            | "true" | "false" | "nullptr" ;
+
+
+(* ----------------------------------------------------------------------
+   2. PATHS AND NAMES
+   ---------------------------------------------------------------------- *)
+
+(* "." is the namespace/module separator. [DECIDED]
+   "::" is reserved for declarations. [DECIDED]
+   "%"  is field access and the type sigil. [DECIDED] *)
+
+module_path = ident { "." ident } ;
+
+(* A type name, optionally qualified:  %Vector2   geometry.%Vector2 *)
+type_path   = { ident "." } pct_ident ;
+
+(* A value/function name, optionally qualified:  sqrt   math.sin   math.$PI *)
+name_ref    = { ident "." } ( ident | ct_ident ) ;
+
+
+(* ----------------------------------------------------------------------
+   3. TYPES
+   ---------------------------------------------------------------------- *)
+
+type        = ref_type | ptr_type | array_type | func_type | named_type ;
+
+(* The only aggregate type besides user types. [DECIDED]
+   N is a compile-time constant expression:  [3]f64   [$N]%Vector2
+   No tuples and no slices. "str" is the read-only string view and is just a
+   builtin type. *)
+array_type  = "[" expr "]" type ;
+
+(* &T  &mut T  *T  *mut T are four distinct types. [DECIDED] *)
+ref_type    = "&" [ "mut" ] type ;
+ptr_type    = "*" [ "mut" ] type ;
+
+named_type  = builtin_type | type_path ;
+
+(* [PROVISIONAL] needed so "let auto :: f = sqrt" can be written with an
+   explicit type when sqrt is overloaded. *)
+func_type   = "func" "(" [ type { "," type } ] ")" [ "->" type ] ;
+
+(* In type position the lexer may produce "&&" for a reference to a reference.
+   The parser must split it into two "&". *)
+
+(* Slices, tuples, generics: not in the language. *)
+
+
+(* ----------------------------------------------------------------------
+   4. DECLARATIONS
+   ---------------------------------------------------------------------- *)
+
+(* The single declaration shape, used for let / static / const.  [DECIDED]
+   The leading keyword makes it unambiguous at the start of a statement, and
+   the LAST "::" always separates the type from the name, because "." (not
+   "::") is the path separator:
+       let mut f64 :: v = 0.0;
+       let auto :: force = coulomb_force($ref(a), $ref(b));
+       let math.Real :: x;
+       const f64 :: $PI = 3.14159265358979;                                 *)
+var_decl    = ( "let" | "static" | "const" ) [ "mut" ]
+              ( type | "auto" ) "::" decl_name [ "=" expr ] ";" ;
+
+decl_name   = ident | ct_ident | wildcard ;
+
+(* Semantic checks the grammar does not enforce:
+     - "let" is statement-level only (not at module level)
+     - "const" requires an initializer; "$name" is only valid with "const"
+     - "const mut" is an error
+     - "auto" requires an initializer                                        *)
+
+(* A struct field uses the same type :: name shape. [FROM SAMPLE] *)
+field_decl  = [ attribute_list ] [ "pub" ] type "::" ident ";" ;
+
+
+(* ----------------------------------------------------------------------
+   5. ITEMS
+   ---------------------------------------------------------------------- *)
+
+(* [DECIDED] "module" is optional. A file without it belongs to the implicit
+   <root> module (not a writable name). Several files may contribute to one
+   module. The program entry point is always the function main in module main
+   (main.main). *)
+source_file = [ module_decl ] { import_decl } { item } ;
+
+module_decl = { doc_comment } "module" module_path ";" ;
+
+(* [DECIDED] Which source files belong to the project is declared in
+   xenon.toml, not in source. Imports only name modules:
+       import math;        then:   math.sin(x)                            *)
+import_decl  = { doc_comment } "import" module_path ";" ;
+
+item        = { doc_comment } [ attribute_list ] ( type_decl
+            | impl_decl
+            | func_decl
+            | var_decl            (* "static" and "const" only *)
+            | ct_if_item ) ;
+
+type_decl   = [ "pub" ] "type" pct_ident "{" { field_decl | ct_if_field } "}" ;
+
+impl_decl   = "impl" type_path "{" { method_decl | ct_if_member } "}" ;
+
+(* A function with ";" instead of a body is a declaration only
+   (builtin / extern), e.g.   func sqrt(f64 :: x) -> f64;
+   Overloading: signature = name + parameter types (+ owner + receiver form).
+   The return type is not part of it.  [DECIDED] *)
+func_decl   = [ "pub" ] "func" ident "(" [ param_list ] ")" [ "->" type ]
+              ( block | ";" ) ;
+
+method_decl = [ attribute_list ] [ "pub" ] "func" ident "(" [ self_param [ "," param_list ] | param_list ] ")"
+              [ "->" type ] ( block | ";" ) ;
+
+self_param  = [ "&" [ "mut" ] ] "self" ;                   (* [FROM SAMPLE] *)
+
+param_list  = param { "," param } [ "," ] ;
+
+(* [DECIDED] Same "type :: name" shape as fields and declarations:
+       &%Particle :: a
+   Every declaration has a type, even if that type is just "auto". This is
+   the reason for type-first order: with "name :: type", "auto" would not be
+   needed, but nothing would be uniformly typed. *)
+param       = [ "mut" ] type "::" ( ident | wildcard ) ;
+
+(* Compile-time conditional at item level. Branches contain items. *)
+ct_if_item  = "$if" expr "{" { item } "}"
+              { "$else" "$if" expr "{" { item } "}" }
+              [ "$else" "{" { item } "}" ] ;
+
+(* [DECIDED] "$if" is also allowed inside struct bodies and impl blocks.
+   The condition must be evaluable at compile time (semantic check). *)
+ct_if_field  = "$if" expr "{" { field_decl | ct_if_field } "}"
+               { "$else" "$if" expr "{" { field_decl | ct_if_field } "}" }
+               [ "$else" "{" { field_decl | ct_if_field } "}" ] ;
+
+ct_if_member = "$if" expr "{" { method_decl | ct_if_member } "}"
+               { "$else" "$if" expr "{" { method_decl | ct_if_member } "}" }
+               [ "$else" "{" { method_decl | ct_if_member } "}" ] ;
+
+
+(* ----------------------------------------------------------------------
+   6. STATEMENTS
+   ---------------------------------------------------------------------- *)
+
+block       = "{" { stmt } "}" ;
+
+stmt        = var_decl
+            | assign_stmt
+            | incdec_stmt
+            | return_stmt
+            | if_stmt
+            | while_stmt
+            | do_while_stmt
+            | do_stmt
+            | "break" ";"
+            | "continue" ";"
+            | ct_if_stmt
+            | block
+            | expr_stmt ;
+
+expr_stmt   = expr ";" ;
+
+assign_stmt = postfix_expr assign_op expr ";" ;
+assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "**="
+            | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+(* No "%=": remainder is the functions mod and modulo. *)
+
+(* [PROPOSED] Increment and decrement are STATEMENTS, postfix only:
+       i++;    count--;
+   They are not expressions, so there is no  a[i++] = i  evaluation-order
+   trap, and no prefix form. Lexing note: "--" is a token, so "a--b" is a
+   syntax error; write "a - -b". *)
+incdec_stmt = postfix_expr ( "++" | "--" ) ";" ;
+
+return_stmt = "return" [ expr ] ";" ;
+(* No tail-expression blocks: every value is returned explicitly. [FROM SAMPLE]
+   Confirm this is intended. *)
+
+(* Compile-time conditional at statement level. Branches contain statements. *)
+ct_if_stmt  = "$if" expr block
+              { "$else" "$if" expr block }
+              [ "$else" block ] ;
+
+(* Runtime control flow [PROVISIONAL]: none of this appears in the sample. *)
+if_stmt     = "if" expr block { "else" "if" expr block } [ "else" block ] ;
+while_stmt  = "while" expr block ;
+
+(* [DECIDED] Loops. There is no "loop" keyword.
+   Both forms start with "do". The next token decides which one it is:
+     "{"                      -> do-while
+     a type or "auto"         -> count-controlled loop
+   so the parser needs one token of lookahead and no backtracking.
+
+   Do-while (the condition is followed by ";", so struct literals in it
+   need no parentheses):
+       do { ... } while i < n;
+
+   Count-controlled; the loop variable is declared like everything else, with
+   a type (which may be "auto"), and "_" may be used when it is not needed:
+       do i32 :: i in range(start, stop, step) { ... }
+       do auto :: i in range(0, n) { ... }
+       do auto :: _ in range(0, n) { ... }
+   To the parser, "range(...)" is an ordinary call expression. "_" is already
+   part of decl_name. A "$name" is also accepted here by decl_name; rejecting
+   it is a semantic check. *)
+do_while_stmt = "do" block "while" expr ";" ;
+
+do_stmt     = "do" ( type | "auto" ) "::" decl_name "in" expr block ;
+
+(* In the condition of if/while/$if, and in the expression after "in" of a do
+   loop, a struct literal must be wrapped in parentheses, otherwise "{" is
+   ambiguous between literal and block. *)
+
+
+(* ----------------------------------------------------------------------
+   7. EXPRESSIONS
+   ---------------------------------------------------------------------- *)
+
+(* Precedence, lowest to highest:
+     ?:           (right-associative)
+     ||
+     &&
+     == != < <= > >=
+     |
+     ^
+     &
+     << >>
+     + -
+     * /          (no remainder operator: use the functions mod and modulo)
+     unary - ! ~
+     **           (right-associative)
+     postfix: call, field "%x", index
+   "**" binds tighter than unary minus on its left, and accepts a unary
+   operand on its right:   -x ** 2  ==  -(x ** 2)     2 ** -1  is valid.   *)
+
+expr        = cond_expr ;
+
+(* [PROPOSED] C-style conditional. Lazy: only the selected branch is
+   evaluated, so  d != 0 ? n / d : 0  never divides by zero.
+   Right-associative, lowest precedence. *)
+cond_expr   = or_expr [ "?" expr ":" cond_expr ] ;
+or_expr     = and_expr { "||" and_expr } ;
+and_expr    = cmp_expr { "&&" cmp_expr } ;
+cmp_expr    = bitor_expr [ cmp_op bitor_expr ] ;      (* non-associative *)
+cmp_op      = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+bitor_expr  = bitxor_expr { "|" bitxor_expr } ;
+bitxor_expr = bitand_expr { "^" bitand_expr } ;
+bitand_expr = shift_expr { "&" shift_expr } ;
+shift_expr  = add_expr { ( "<<" | ">>" ) add_expr } ;
+add_expr    = mul_expr { ( "+" | "-" ) mul_expr } ;
+mul_expr    = unary_expr { ( "*" | "/" ) unary_expr } ;
+unary_expr  = ( "-" | "!" | "~" ) unary_expr | pow_expr ;
+pow_expr    = postfix_expr [ "**" unary_expr ] ;
+
+(* There is no unary "&" or "*" in expressions: references and pointers are
+   made with $ref(x), $ref(mut x), and $ptr(x), ordinary calls whose callee
+   is a ct_ident.  [DECIDED] *)
+
+postfix_expr = primary { call_suffix | field_suffix | index_suffix } ;
+call_suffix  = "(" [ expr { "," expr } [ "," ] ] ")" ;
+(* Call arguments are ALWAYS expressions. Intrinsics that take a type or a
+   place have their own production (intrinsic_expr), so the parser never has
+   to guess whether an argument is a type. *)
+field_suffix = pct_ident ;                       (* a%position%x *)
+index_suffix = "[" expr "]" ;
+
+primary     = literal
+            | "self"
+            | struct_lit
+            | array_lit
+            | intrinsic_expr
+            | name_ref
+            | "(" expr ")" ;
+
+struct_lit  = type_path "{" [ field_init { "," field_init } [ "," ] ] "}" ;
+field_init  = ident ":" expr ;                   (* [FROM SAMPLE] value syntax *)
+
+(* Note: declarations use "::" (type :: name) and struct-literal fields use
+   ":" (name: value). They are different on purpose: one declares, one
+   assigns. *)
+
+(* [PROVISIONAL] array literal, mirroring struct literals:
+       [3]f64 { 1.0, 2.0, 3.0 }
+   Arrays are fixed-length until generics and slices arrive (1.2.x). *)
+array_lit   = array_type "{" [ expr { "," expr } [ "," ] ] "}" ;
+
+(* [DECIDED] Intrinsics whose arguments are not all ordinary expressions get
+   dedicated productions. The parser recognizes them by the exact text of a
+   ct_ident token, so no type-vs-expression guessing is needed.
+       $sizeof(%Particle)    $cast(f64, n)    $ref(electron)
+   Every OTHER "$name(...)" is parsed as an ordinary call; unknown names are
+   reported by name resolution, not by the parser. *)
+intrinsic_expr
+            = ( "$sizeof" | "$alignof" ) "(" type ")"
+            | ( "$cast" | "$bitcast" | "$saturate" | "$truncate" )
+              "(" type "," expr ")"
+            | "$println" "(" expr { "," expr } ")"
+            | ( "$ref" | "$ptr" ) "(" [ "mut" ] place ")" ;
+(* Mutability is syntactically expressed inside $ref(...) or $ptr(...). *)
+
+(* Mutability is carried by the optional "mut" place argument to $ref or $ptr,
+   or by a mutability-bearing type such as &mut T. *)
+
+place       = postfix_expr ;   (* semantic check: must denote a storage location *)
+
+
+(* ======================================================================
+   OPEN ISSUES
+   ======================================================================
+
+   RESOLVED
+     - Remainder: ordinary functions mod and modulo, overloaded for ints
+       and floats. "%" is never infix.
+     - Parameters are "type :: name".
+     - Unsuffixed literals default to i32 / f64 in overload rule 6. This
+       needs no grammar change: the token only carries an "unsuffixed" flag.
+       (Update the spec text: add(1.0, 2.0) with f32/f64 overloads now
+       picks f64.)
+     - 'x' is the one character literal: rune by default, adopting char when
+       it fits in a byte.
+     - $cast wraps on overflow. $bitcast, $saturate and $truncate exist.
+       All four take (type, expr).
+     - Intrinsics with type or place arguments have dedicated productions
+       (intrinsic_expr). Call arguments are always expressions.
+     - "import module_path;", with the file list in xenon.toml.
+     - Arrays are [N]T. No tuples, no slices (as of v0.1.3). Generics and
+       slices come in 1.2.x.
+     - "$if" is allowed in struct bodies and impl blocks.
+     - "module" is optional (implicit <root> module). Several files may
+       contribute to one module. The entry point is always main.main.
+     - Loops: "while", do-while ("do { } while cond;") and the
+       count-controlled "do type :: i in range(...)". No "loop" keyword.
+
+   PROPOSED (your call)
+     - "++" / "--" as postfix STATEMENTS only (not expressions).
+     - C-style ternary  c ? a : b  (lazy, right-associative, lowest
+       precedence).
+
+   STILL OPEN (syntax only)
+
+   OPEN-A  "_" is accepted only in binding positions: the do-loop variable,
+           a declaration name, a parameter name. It is not accepted as an
+           assignment target (_ = f();) or in expressions. Add if wanted.
+
+           Not accepted as a binding target indeed
+
+   DEFERRED to semantic analysis (not needed for lexing or parsing)
+     - mod / modulo sign convention
+     - rune variable -> char conversion
+     - implicit numeric conversions, and what $truncate means
+     - float -> int behavior for NaN, infinity and out-of-range values
+     - what range(start, stop, step) is, and how its element type relates to
+       the loop variable's declared type
+   ====================================================================== *)
+
+
+(* ======================================================================
+   APPENDIX - the 0.1.3 sample, rewritten for this grammar
+   (parses with the productions above; a useful first parser test)
+
+   module main;
+
+   const f64 :: $K_E = 8.9875517923e9;
+   const f64 :: $DT  = 0.001;
+
+   type %Vector2 {
+       f64 :: x;
+       f64 :: y;
+   }
+
+   impl %Vector2 {
+       func length(&self) -> f64 {
+           return sqrt(self%x ** 2 + self%y ** 2);
+       }
+   }
+
+   type %Particle {
+       %Vector2 :: position;
+       %Vector2 :: velocity;
+       f64 :: charge;
+       f64 :: mass;
+   }
+
+   func coulomb_force(&%Particle :: a, &%Particle :: b) -> %Vector2 {
+       let f64 :: dx = a%position%x - b%position%x;
+       let f64 :: dy = a%position%y - b%position%y;
+
+       let f64 :: distance_squared = dx ** 2 + dy ** 2;
+       let f64 :: distance = sqrt(distance_squared);
+
+       let f64 :: force_magnitude =
+           $K_E * a%charge * b%charge / distance_squared;
+
+       let f64 :: fx = force_magnitude * dx / distance;
+       let f64 :: fy = force_magnitude * dy / distance;
+
+       return %Vector2 { x: fx, y: fy };
+   }
+
+   func update_particle(&mut %Particle :: particle, &%Vector2 :: force) {
+       let f64 :: ax = force%x / particle%mass;
+       let f64 :: ay = force%y / particle%mass;
+
+       particle%velocity%x += ax * $DT;
+       particle%velocity%y += ay * $DT;
+
+       particle%position%x += particle%velocity%x * $DT;
+       particle%position%y += particle%velocity%y * $DT;
+   }
+
+   func main() {
+       let mut %Particle :: electron = %Particle {
+           position: %Vector2 { x: -1.0, y: 0.0 },
+           velocity: %Vector2 { x: 0.0, y: 0.0 },
+           charge: -1.602176634e-19,
+           mass: 9.1093837e-31
+       };
+
+       let mut %Particle :: proton = %Particle {
+           position: %Vector2 { x: 1.0, y: 0.0 },
+           velocity: %Vector2 { x: 0.0, y: 0.0 },
+           charge: 1.602176634e-19,
+           mass: 1.6726219e-27
+       };
+
+       let auto :: force = coulomb_force($ref(electron), $ref(proton));
+
+       update_particle($ref(mut electron), $ref(force));
+   }
+   ====================================================================== *)

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     XenonCompiler
-    VERSION 0.1.0
+    VERSION 0.1.1
     LANGUAGES CXX
 )
 
@@ -14,10 +14,17 @@ option(ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
 option(WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 
 set(
-    DEFAULT_TRIPLE
+    DEFAULT_TARGET
     "unknown"
     CACHE STRING
-    "Default Xenon target triple"
+    "Default Xenon target"
+)
+
+set(
+    XEC_VERSION
+    "unknown"
+    CACHE STRING
+    "Xenon compiler version"
 )
 
 # --------------------------------------------------
@@ -47,14 +54,12 @@ FetchContent_MakeAvailable(tomlplusplus)
 file(
     GLOB_RECURSE XENON_SOURCES
     CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/compiler/*.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/*.cpp"
 )
-
-list(FILTER XENON_SOURCES EXCLUDE REGEX "^${PROJECT_SOURCE_DIR}/compiler/semantic/")
 
 add_executable(
     xec
-    "${PROJECT_SOURCE_DIR}/compiler/main.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/main.cpp"
     ${XENON_SOURCES}
 )
 
@@ -76,7 +81,7 @@ target_compile_features(
 target_include_directories(
     xec
     PRIVATE
-        "${PROJECT_SOURCE_DIR}/compiler"
+        "${PROJECT_SOURCE_DIR}/xec/src"
 )
 
 # --------------------------------------------------
@@ -86,7 +91,9 @@ target_include_directories(
 target_compile_definitions(
     xec
     PRIVATE
-        XENON_DEFAULT_TRIPLE="${DEFAULT_TRIPLE}"
+        XEC_VERSION="${PROJECT_VERSION}"
+        DEFAULT_TARGET="${DEFAULT_TARGET}"
+        DEFAULT_HOME="${CMAKE_INSTALL_PREFIX}/share/xenon"
 )
 
 # --------------------------------------------------
@@ -104,7 +111,7 @@ target_link_libraries(
 # --------------------------------------------------
 
 if(MSVC)
-
+                                
     target_compile_options(
         xec
         PRIVATE
@@ -159,7 +166,7 @@ target_compile_options(
 # Sanitizers
 # --------------------------------------------------
 
-if(ENABLE_ASAN AND NOT MSVC)
+if((ENABLE_ASAN OR CMAKE_BUILD_TYPE MATCHES "Debug") AND NOT MSVC)
 
     target_compile_options(
         xec
@@ -181,4 +188,42 @@ endif()
 # --------------------------------------------------
 
 message(STATUS "Xenon compiler version: ${PROJECT_VERSION}")
-message(STATUS "Default Xenon target:   ${DEFAULT_TRIPLE}")
+message(STATUS "Default target:   ${DEFAULT_TARGET}")
+
+# Lexer golden-test CLI
+add_executable(xenon-lex tools/xenon-lex.cpp)
+target_compile_features(xenon-lex PRIVATE cxx_std_20)
+target_include_directories(xenon-lex PRIVATE "${PROJECT_SOURCE_DIR}/xec/src")
+target_sources(xenon-lex PRIVATE
+    "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file_manager.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/common/diagnostics/diagnostic_collector.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/lexer/lexer.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/lexer/token.cpp")
+target_link_libraries(xenon-lex PRIVATE tomlplusplus::tomlplusplus)
+
+if(NOT MSVC)
+    target_compile_options(xenon-lex PRIVATE -Wall -Wextra -Wpedantic)
+    if(CMAKE_BUILD_TYPE MATCHES "Debug" OR ENABLE_ASAN)
+        target_compile_options(xenon-lex PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(xenon-lex PRIVATE -fsanitize=address,undefined)
+    endif()
+endif()
+
+# AST library smoke test
+enable_testing()
+add_executable(test-xenon-ast test/xenon_ast.cpp
+    "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file.cpp"
+    "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file_manager.cpp")
+set_target_properties(test-xenon-ast PROPERTIES
+    OUTPUT_NAME xenon-ast)
+target_compile_features(test-xenon-ast PRIVATE cxx_std_20)
+target_include_directories(test-xenon-ast PRIVATE "${PROJECT_SOURCE_DIR}/xec/src")
+if(NOT MSVC)
+    target_compile_options(test-xenon-ast PRIVATE -Wall -Wextra -Wpedantic)
+    if(CMAKE_BUILD_TYPE MATCHES "Debug" OR ENABLE_ASAN)
+        target_compile_options(test-xenon-ast PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(test-xenon-ast PRIVATE -fsanitize=address,undefined)
+    endif()
+endif()
+add_test(NAME xenon-ast COMMAND test-xenon-ast "${PROJECT_SOURCE_DIR}/tests/astlib_smoke.xe")

@@ -2,7 +2,7 @@
 build/
 .cursor/
 .idea/
-.test/
+.tests/
 .trash/
 .test_results/
 .vscode/
@@ -30,3 +30,4 @@ examples/
 docs/compiler
 *.old
 .clangd
+.github/

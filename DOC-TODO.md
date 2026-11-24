@@ -8,6 +8,9 @@ Items marked **[DECIDED]** resolve a conflict between scrap documents. They
 are listed again in the Decision Log at the bottom. Items marked **[OPEN]**
 still need your decision.
 
+The "Compiler Toolchain (v1)" section near the end documents the v1 pipeline,
+configuration files, environments, standard library and capabilities.
+
 # README.md
 
 - [ ] What is Xenon
@@ -40,7 +43,8 @@ still need your decision.
 - [ ] Non-goals: source compatibility with other languages, transpilation,
   a garbage-collected runtime.
 - [ ] Mental model: program = modules, one `.xe` file per module; execution
-  begins at `main` in module `main`.
+  begins at a function the selected environment requires (`main::main` for the
+  `xenon` environment).
 - [ ] Table of contents (see the section list below).
 
 ## Lexical Structure
@@ -141,13 +145,18 @@ still need your decision.
   - Errors: `''`, `'ab'`, surrogates, > U+10FFFF, bare newline.
 - [ ] String literals
   - UTF-8, same escapes as runes, plus raw strings `r"…"` and `r#"…"#`.
-  - Type is always `str`, never `*u8`, `[u8; N]` or `&[u8; N]`.
+  - Type is always `str`, never `*u8`, `[N]u8` or `&[N]u8`.
   - Not addressable, so `&"hello"` is an error.
 - [ ] Boolean and `nullptr` literals.
 - [ ] Array literals
-  - List form `[1, 2, 3]` and typed form `[f32; 3] { … }`.
-  - No repeat form, no empty literal (`[T; 0]` is invalid).
-  - Element count must equal `N`. Element metavariables unify across the array.
+  - **[DECIDED]** List form only: `[1, 2, 3]`. There is no typed literal
+    (`[3]f32{ … }`), because it would reintroduce `T{ x }`-style construction,
+    which is deferred to v0.2 with casting. The element type comes from the
+    annotation (`let a: [3]f32 = [1, 2, 3];`, using contextual literal
+    inference) or from defaulting (`[1.0, 2.0]` is `[2]f32`).
+  - No repeat form, no empty literal (`[0]T` is invalid).
+  - With an annotation, the element count must equal `N`. Element
+    metavariables unify across the array.
 - [ ] Struct literals
   - Named `Point { x: 1, y: 2 }` (any order) or positional `Point { 1, 2 }`
     (declaration order). No shorthand, so `Point { x, y }` is positional.
@@ -224,7 +233,6 @@ still need your decision.
   - Mutable places: `let mut` or `mut` params, fields/elements of mutable places,
     `*p` for `*mut T`, referent of `&mut T`.
   - Calls returning a reference designate the referent's storage.
-- [ ] No operator overloading in v0.1 (function overloading does exist).
 
 ## Statements
 
@@ -306,7 +314,7 @@ still need your decision.
     expression, evaluated on first access". Wider initializers arrive with
     `const` in v0.2.
 - [ ] `const` bindings
-  - **[DECIDED]** Deferred to v0.2. `[T; N]` therefore takes only a literal `N`
+  - **[DECIDED]** Deferred to v0.2. `[N]T` therefore takes only a literal `N`
     in v0.1. The draft said literals were supported "as of 1.0", which
     contradicts `types.md`.
   - Planned: immutable, compile-time expression, `const mut` is an error.
@@ -321,7 +329,10 @@ still need your decision.
     `type Counter;` form is dropped.
   - Fields are private by default, and `pub` exposes them.
   - Struct literals follow the rules under Literals.
-- [ ] Static arrays `[T; N]`
+- [ ] Static arrays `[N]T`
+  - **[DECIDED]** The length comes first, so the type reads left to right and
+    matches indexing: `[2][3]f64` is 2 rows of 3, and `a[i][j]` has `i < 2` and
+    `j < 3`. This replaces `[T; N]`.
   - `N` is a non-zero integer literal. The length is part of the type.
   - Bounds-checked indexing.
 - [ ] Type equality: same primitive, or same nominal declaration.
@@ -433,9 +444,19 @@ still need your decision.
   - Method receivers follow the receiver rule under Methods, then the rules
     above apply to the remaining arguments.
 - [ ] `pub func` for cross-module visibility.
-- [ ] `main`
-  - Required, in module `main`, no arguments, returns `void` or `i32`
-    (the process exit code).
+- [ ] Required functions
+  - **[DECIDED]** The language itself does not require `main`. The selected
+    environment's `required_functions` list names the functions a program must
+    define, with their signatures. An omitted return type means `void`. The
+    hosted `xenon` environment requires `main::main(usize, *str) -> i32`
+    (argument count, argument vector, and the process exit code). The
+    illustrative `caesium` environment would require `main::setup()` and
+    `main::loop()`.
+  - **[DECIDED]** An entry is the widest signature the environment calls. A
+    program may omit trailing parameters, so `main()`, `main(usize)` and
+    `main(usize, *str)` all satisfy the `xenon` entry. Parameters may not be
+    retyped, reordered or added, and the return type must match exactly.
+  - See Compiler Toolchain > Required Functions.
 
 ## Memory
 
@@ -495,12 +516,41 @@ still need your decision.
 
 ## Modules
 
-- [ ] One `.xe` file is one module. It starts with `module name;`
-  (`module a::b;` is allowed), and imports follow at the top. There are no
-  inline modules.
-- [ ] `runtime.xe` is the one file without a module declaration.
-  - **[OPEN]** Making `module <name>;` optional in user files. See Open
-    Decisions.
+- [ ] A source file that starts with `module name;` declares one named module
+  (`module a::b;` is allowed), and imports follow at the top. A file declares at
+  most one module, and there are no inline modules. A file with no `module`
+  declaration is a global-scope file (see "Global scope" below).
+- [ ] Global scope
+  - **[DECIDED]** `module <name>;` is optional. A file with one declares a
+    named module. A file without one contributes its declarations to the
+    **global scope**.
+  - A global-scope file listed in `source_files` behaves like `runtime.xe`: its
+    `pub` declarations are available in every module without an import.
+    `runtime.xe` is simply a global-scope file supplied by the environment, so it
+    needs no special module declaration.
+  - Unqualified names resolve in local scopes, then the current module, then
+    the global scope. A leading `::` names the global scope explicitly, so
+    `::say` always means the global `say`, even if the current module declares
+    its own `say`.
+  - Example. `libs/utils.xe` has no `module` line:
+    ```xe
+    pub func say(s: str) {
+        println(s);
+    }
+    ```
+    and a listed module uses it:
+    ```xe
+    module main;
+
+    func main() -> i32 {
+        say("Ping");     // normal lookup finds the global `say`
+        ::say("Pong");   // explicit global scope
+        return 0;
+    }
+    ```
+  - **[OPEN]** Corner cases: privacy of non-`pub` items in a global-scope
+    file, imports inside one, redeclaration rules and lookup precedence are
+    recommended in Open Decisions (item 3).
 - [ ] `import path;` imports a whole module. The full path is required, with no
   aliases, globs, item imports or `use`.
   - **[DECIDED]** After `import utils::helpers;` the module is referred to by
@@ -510,8 +560,14 @@ still need your decision.
     matches what the driver already does:
     - `project.source_files` in `xenon.toml` lists each source file, relative to
       the project root (the directory containing `xenon.toml`).
-    - The project's modules are exactly the files in `project.source_files`
-      (`xenon.toml`). Nothing is auto-discovered.
+    - The project's own modules are exactly the files in
+      `project.source_files` (`xenon.toml`). Nothing in the project is
+      auto-discovered.
+    - **[DECIDED]** Standard-library modules are the one exception. They are
+      discovered under `<installation>/stdlib/<name>/module.toml` and parsed
+      only when a module imports them (see Compiler Toolchain > Standard
+      Library). A user module with the same name as a standard-library module
+      is **[OPEN]** (see Open Decisions).
     - A module's name is the one in its `module` declaration. File name and
       directory are irrelevant. The analyser never assumes a layout.
     - Two files declaring the same module name is an error.
@@ -520,8 +576,10 @@ still need your decision.
       error if only `verification::age_verification` exists.
     - `a` and `a::b` may both exist. Nesting is only naming, with no
       parent/child relationship.
-    - Exactly one module named `main` must exist and contain `main`. `runtime.xe`
-      is supplied by the compiler and is not listed.
+    - Every function in the selected environment's `required_functions` list must
+      exist and match its signature (`xenon` requires `main::main(usize, *str) -> i32`).
+      `runtime.xe` is supplied by the environment and is not listed in
+      `source_files`.
     - Import cycles (including self-import) are errors.
 - [ ] Visibility
   - Everything is private by default. `pub` applies to functions, types, fields,
@@ -529,12 +587,19 @@ still need your decision.
   - Modules have no visibility of their own.
   - A declaration is accessible from another module if it is `pub` **and** the
     module is imported.
-- [ ] Paths use `::` (`math::add`, `Point::origin`, `Counter::total`).
-  - Unqualified names resolve in the current module. Unresolved names are errors.
+- [ ] Paths use `::` (`math::add`, `Point::origin`, `Counter::total`). A
+  leading `::` (`::say`) refers to the global scope.
+  - Unqualified names resolve as described under "Global scope". Unresolved
+    names are errors.
 - [ ] Constructors protecting invariants (the `Age::init` example).
 
 ## Runtime
 
+- [ ] Environment dependence
+  - Each environment target supplies its own `runtime.xe` and C runtime. The items
+    below describe the hosted `xenon` environment (stderr, process exit codes).
+    Other environments such as `caesium` have no stderr and no process to exit, and
+    may implement `panic`, `exit` and `println` differently.
 - [ ] Panic
   - **[DECIDED]** `panic(message: str)` prints to stderr, terminates the program
     with exit code 101 and never returns (`#[noreturn]`). It is not UB, and it
@@ -569,11 +634,16 @@ still need your decision.
     `link_name` carries the symbol.
 - [ ] `#[noreturn]`: never returns to its caller. It interacts with return-path
   analysis as described under Statements.
+- [ ] `#[require_capability("name")]`: reserved syntax. It parses as an
+  ordinary annotation on a function or module and has no effect in v1. Intended
+  future meaning: the declaration may only be used when the selected environment and
+  target provide capability `name`. See Compiler Toolchain > Capabilities.
 - [ ] Doc comments `///` attach to the following declaration.
 
 ### Xenon Exit Code Standard
 
-- [ ] Define the standard exit codes.
+- [ ] Define the standard exit codes. These apply to hosted environments (`xenon`).
+  Bare-metal environments define their own behaviour.
   - `0`: successful termination.
   - `1`: general failure.
   - `101`: runtime panic.
@@ -583,6 +653,430 @@ still need your decision.
   - Document portability limits imposed by operating systems and shells (for
     example, Unix keeps only the low 8 bits).
   - Follow the Unix convention that zero is success and nonzero is failure.
+
+---
+
+# Compiler Toolchain (v1)
+
+How the compiler turns a project into an executable. The phases are logical,
+not six separate subsystems. The dataclasses below are conceptual Python; the
+compiler itself is C++. Anything not described here is out of scope for v1
+(see "Out of Scope for v1" at the end of this section).
+
+Only the hosted `xenon` environment ships and is implemented in v1. `caesium`
+appears below as an illustrative future environment, to show why environments are
+extensible. Nothing for it needs to be built now.
+
+## Pipeline
+
+- [ ] **Phase 1: Preprocessing**
+  1. Parse CLI arguments.
+  2. Locate and parse `xenon.toml`.
+  3. Load the selected environment's `environment.toml`. The environment name is resolved
+     first (CLI, then project config, then the default `xenon`), because it decides
+     which file to load.
+  4. Discover standard-library modules by reading their `module.toml` files.
+  5. Resolve CLI, project config, environment, target and capabilities into a single
+     `ResolvedConfigs`.
+  - Output: `ResolvedConfigs` and discovered standard-library metadata.
+- [ ] **Phase 2: Parsing**
+  1. Lex and parse every project source file into an AST.
+  2. Parse the selected target's `runtime.xe`. It is a global-scope file.
+  3. Parse a standard-library module only when an already-parsed module imports
+     it. Import *discovery* is therefore a worklist inside Phase 2, and Phase 3
+     does the resolution and validation.
+  4. Collect all resulting ASTs.
+  - Output: parsed module ASTs.
+- [ ] **Phase 3: Pre-analysis**
+  1. No two source files may declare the same module name.
+  2. Files without a module declaration contribute their declarations to the
+     global scope (see Modules > Global scope). They are not nodes in the
+     dependency graph.
+  3. Resolve module imports.
+  4. Build the module dependency graph.
+  5. Kahn's algorithm produces a topological compilation order.
+  6. Report circular dependencies if the graph cannot be fully ordered.
+  - Output: dependency graph and compilation order.
+- [ ] **Phase 4: Semantic analysis**
+  1. Process modules in dependency order.
+  2. Resolve names and symbols.
+  3. Resolve types.
+  4. Resolve function overloads.
+  5. Validate the environment's `required_functions`: each must exist and match
+     its signature (see Required Functions).
+  6. Check calls, expressions and the remaining semantic rules.
+  - Capabilities are not checked in v1 (see Capabilities).
+  - Output: typed AST.
+- [ ] **Phase 5: Code generation**
+  1. Generate LLVM IR.
+  2. Verify the LLVM module.
+  3. Generate target object files.
+  4. Compile the environment target's `c_source` for the selected target. The
+     `c_source` of every imported standard-library module is compiled the same
+     way.
+  - Output: object files.
+  - Carried over from earlier design discussion (drop it if unwanted): verify
+    that `Target.pointer_width` equals the pointer size in LLVM's `DataLayout`,
+    and report a mismatch as an error.
+- [ ] **Phase 6: Linking**
+  1. Link the generated object files.
+  2. Link the environment's runtime and C support, plus the system libraries named
+     by imported standard-library modules (`link_libs`, for example `m`).
+  3. Apply the target's `linker_script` if provided.
+  4. Produce the final ELF executable.
+  - Output: executable.
+
+## Configuration
+
+### CLI
+
+- [ ] `CLIArgs` holds `command`, `project_dir` (default `.`) and the optional
+  overrides `target`, `environment`, `optimisation` and `output`.
+- [ ] Relative paths given on the CLI are relative to the current working
+  directory. Paths in `xenon.toml` are relative to the project directory.
+- [ ] Capabilities cannot be set from the CLI.
+- [ ] The CLI front end is `xec`. v1 needs at least `xec build <project>`.
+  `xenon.toml` is read from `<project_dir>/xenon.toml`. There is no search of
+  parent directories. **[OPEN]** The full command set (is there `init`?) is
+  unspecified.
+
+### Project config (`xenon.toml`)
+
+- [ ] Contains project information, build overrides and capability overrides.
+  ```toml
+  [project]
+  name = "My Project"
+  source_files = ["src/main.xe", "libs/utils.xe"]
+
+  [build]
+  environment = "xenon"
+  target = "x86_64-linux"
+  optimisation = "release"
+
+  [capabilities]
+  fpu = true
+  ```
+- [ ] The project config preserves omitted values. Defaults are applied only during
+  resolution.
+- [ ] Unknown keys are errors, so a misspelled `optimisation` cannot silently
+  fall back to a default. `project.version` and `project.authors` are accepted
+  and ignored.
+- [ ] `optimisation` is `"debug"` or `"release"`. It decides whether overflow
+  checks are on (`debug` panics on overflow, `release` wraps).
+- [ ] Defaults
+  - **[DECIDED]** `environment`: `xenon`.
+  - **[DECIDED]** `target`: explicitly required. Missing is an error.
+  - **[DECIDED]** `optimisation`: `debug`.
+  - **[DECIDED]** `output`: `build/`, a directory for all build products,
+    relative to the project directory.
+
+### Environment configuration (`environment.toml`)
+
+- [ ] Each installed environment has its own directory with an `environment.toml`.
+  ```text
+  <installation>/
+  ├── xenon/                          (ships in v1)
+  │   ├── environment.toml
+  │   ├── runtime.xe
+  │   ├── libxenon.c
+  │   └── libxenon.h
+  └── caesium/                        (illustrative, not shipped)
+      ├── environment.toml
+      └── rp2040/
+          ├── runtime.xe
+          ├── libcaesium_rp2040.c
+          ├── libcaesium_rp2040.h
+          └── link.ld
+  ```
+- [ ] An environment describes its targets, default capabilities, target-specific
+  capabilities, runtime and C source paths, and required functions.
+- [ ] Paths in `environment.toml` are relative to the environment directory, so an
+  installation can be moved without breaking it.
+- [ ] The `.h` files are only `#include`d by the C sources. The compiler never
+  reads them.
+- [ ] The environment name is the directory name. A `name` key that disagrees with
+  it is an error.
+- [ ] `xenon` example (the environment that ships):
+  ```toml
+  name = "xenon"
+
+  required_functions = [
+      "main::main(usize, *str) -> i32",
+  ]
+
+  [capabilities]
+  fpu = true
+  heap_alloc = true
+
+  [targets.x86_64-linux]
+  llvm_triple   = "x86_64-unknown-linux-gnu"
+  pointer_width = 64                # bits: 16, 32 or 64
+  runtime       = "runtime.xe"
+  c_source      = "libxenon.c"
+  ```
+- [ ] `caesium` example (illustrative only):
+  ```toml
+  name = "caesium"
+
+  required_functions = [
+      "main::setup()",
+      "main::loop()",
+  ]
+
+  [capabilities]                      # environment defaults
+  fpu = false
+  heap_alloc = false
+
+  [targets.rp2040]
+  llvm_triple   = "thumbv6m-unknown-none-eabi"
+  cpu           = "cortex-m0plus"     # optional
+  pointer_width = 32
+  runtime       = "rp2040/runtime.xe"
+  c_source      = "rp2040/libcaesium_rp2040.c"
+  linker_script = "rp2040/link.ld"    # optional
+  configurable  = ["heap_alloc"]
+
+  [targets.rp2040.capabilities]       # target overrides
+  fpu = false
+  ```
+- [ ] There is no `default_target`: the target is always chosen explicitly.
+- [ ] v1 implements hosted targets only. Handling freestanding targets (no
+  system C library or startup files) arrives with the first non-hosted
+  environment, so `Target` has no hosted flag yet.
+
+### Standard library (`stdlib/<name>/module.toml`)
+
+- [ ] v1 has one standard-library module: `math`. The layout supports
+  discovering more later.
+  ```text
+  <installation>/
+  └── stdlib/
+      └── math/
+          ├── module.toml
+          ├── math.xe
+          └── math.c
+  ```
+  ```toml
+  name = "math"
+  source = "math.xe"
+  c_source = "math.c"
+  link_libs = ["m"]       # optional: system libraries passed to the linker
+  ```
+- [ ] Preprocessing reads each subdirectory's `module.toml` to learn the module
+  names. It does not parse the `.xe` files and does not check that they exist.
+- [ ] A module's `.xe` is parsed only if the project imports it (Phase 2).
+- [ ] Paths in `module.toml` are relative to that module's directory.
+- [ ] This `module.toml` is discovery metadata only. There are no dependency
+  fields and no dependency resolution in v1.
+- [ ] The `name` must equal the directory name. Two modules with the same name
+  are an error.
+
+### Resolution rules
+
+- [ ] The resolver produces one `ResolvedConfigs`.
+- [ ] `environment`: CLI, then project config, then `xenon`.
+- [ ] `target`: CLI, then project config. Neither is an error. The target must exist
+  in the selected environment.
+- [ ] `optimisation`: CLI, then project config, then `debug`.
+- [ ] `output`: CLI, then project config, then `build/`.
+- [ ] Capabilities: environment defaults, then target overrides, then project
+  overrides, merged into one map. v1 does no further checking of them.
+- [ ] Source files are made absolute against the project directory. A missing
+  file, a file listed twice and an empty `source_files` are errors.
+
+### Data structures
+
+- [ ] Conceptual Python representation. Translate to C++ structures.
+  ```python
+  @dataclass
+  class CLIArgs:
+      command: str
+      project_dir: Path = Path(".")
+      target: Optional[str] = None
+      environment: Optional[str] = None
+      optimisation: Optional[str] = None
+      output: Optional[Path] = None
+
+  @dataclass
+  class BuildConfig:
+      environment: Optional[str] = None
+      target: Optional[str] = None
+      optimisation: Optional[str] = None
+      output: Optional[Path] = None
+
+  @dataclass
+  class ProjectConfig:
+      name: str
+      source_files: list[Path] = field(default_factory=list)
+      build: BuildConfig = field(default_factory=BuildConfig)
+      # Added: the example xenon.toml has a [capabilities] table.
+      capabilities: dict[str, bool] = field(default_factory=dict)
+
+  @dataclass
+  class Target:
+      name: str
+      llvm_triple: str
+      pointer_width: int            # bits
+      runtime: Path
+      c_source: Path
+      cpu: Optional[str] = None
+      linker_script: Optional[Path] = None
+      capabilities: dict[str, bool] = field(default_factory=dict)
+      configurable: set[str] = field(default_factory=set)
+
+  @dataclass
+  class Environment:
+      name: str
+      targets: dict[str, Target]
+      capabilities: dict[str, bool] = field(default_factory=dict)
+      required_functions: list[str] = field(default_factory=list)
+
+  @dataclass
+  class ModuleManifest:
+      name: str
+      directory: Path
+      source: Path
+      c_source: Optional[Path] = None
+      # Added: math needs libm on hosted targets.
+      link_libs: list[str] = field(default_factory=list)
+
+  @dataclass
+  class ResolvedConfigs:
+      project_name: str
+      project_directory: Path
+      source_files: list[Path]
+      environment: Environment
+      target: Target
+      optimisation: str
+      output: Path
+      capabilities: dict[str, bool]
+      stdlib_directory: Path
+      stdlibs: dict[str, ModuleManifest]
+  ```
+- [ ] C++ notes: `optimisation` is an enum (`debug`, `release`) in the resolved
+  config. Paths in `Environment`, `Target` and `ModuleManifest` are resolved against
+  their own directories when loaded. Fatal configuration errors are reported as
+  exceptions.
+
+## Environments
+
+- [ ] An environment is a preset for the compiler: the platform family. It defines supported
+  targets, default capabilities, runtime files and required functions.
+- [ ] Only `xenon` is implemented in v1.
+- [ ] An environment is a directory containing `environment.toml`.
+- [ ] The environment's `runtime.xe` is a global-scope file. It has no module
+  declaration, nothing imports it, and its names are in scope everywhere. It is
+  loaded unconditionally by the compiler before user code.
+- [ ] Each runtime function is a thin binding to a symbol in the environment's C
+  source (`#[extern("C")]`, `#[link_name]`).
+- [ ] An environment does not provide a separate library registry, prebuilt
+  objects or runtime components in v1.
+
+## Standard Library
+
+- [ ] See the `module.toml` layout above. Only `math` ships in v1, and it must
+  be usable from the first release on the hosted `xenon` environment. That is why
+  `-lm` linking is a v1 feature.
+- [ ] `math` example:
+  ```xe
+  module math;
+
+  #[require_capability("fpu"), extern("C")]
+  pub func sin(n: f64) -> f64;
+  ```
+  The `require_capability` attribute is accepted but has no effect in v1.
+
+## Capabilities
+
+- [ ] Capabilities are configuration metadata in v1. They are read from
+  `environment.toml` and `xenon.toml`, merged, and stored in `ResolvedConfigs`.
+  No phase consumes them, and nothing is checked or enforced.
+- [ ] Known capability names are `fpu` and `heap_alloc`.
+- [ ] `fpu = true` means the selected compilation environment provides the
+  capability. It does not mean the hardware has a physical FPU. A software
+  implementation may provide it.
+- [ ] `#[require_capability("name")]` is reserved syntax. It parses as an
+  ordinary annotation on a function or module and is otherwise ignored in v1.
+- [ ] Intended future behaviour (not in v1, and no machinery should be built
+  for it yet):
+  - Environment: defines default capabilities.
+  - Target: overrides them and lists the `configurable` capabilities.
+  - Project configuration: may override only capabilities the target lists as
+    `configurable`.
+  - Unknown capability names are errors.
+  - The semantic analyser checks `#[require_capability]` after overload
+    resolution, so capabilities never change which overload is chosen. Using
+    a function whose capability is not provided is an error at the use, not
+    at the declaration.
+
+## Required Functions
+
+- [ ] The environment's `required_functions` list names the functions a program
+  must define. The language itself has no required `main`.
+  ```toml
+  required_functions = [
+      "main::main(usize, *str) -> i32",     # xenon
+  ]
+  ```
+  ```toml
+  required_functions = [
+      "main::setup()",           # caesium (illustrative)
+      "main::loop()",
+  ]
+  ```
+- [ ] Signature format: `module::path::name(type, ...) [-> type]`. The return
+  type is optional. If omitted it means `void`.
+- [ ] The signature uses the overload-signature rule (name plus parameter
+  types), so it identifies one overload.
+- [ ] The compiler validates that each required function exists and matches
+  its signature, including the return type (Phase 4). A missing or mismatched
+  function is an error.
+- [ ] The environment loader checks that each entry is well formed. Matching types
+  is done by semantic analysis, which parses the type strings with the normal
+  Xenon type parser.
+- [ ] **[DECIDED]** Prefix rule: an entry is the widest signature the
+  environment calls. The program's function may omit trailing parameters and
+  nothing else may differ. There are no alternative signatures per entry, so
+  `required_functions` stays a list of strings.
+- [ ] **[DECIDED]** Calling convention: required functions are emitted with C
+  linkage under their path joined with `__` (`main__main`, `main__setup`). The
+  C runtime always calls the widest form, `main__main(argc, argv)`. The compiler
+  emits the symbol with the full signature and ignores parameters the user
+  left out.
+- [ ] **[DECIDED]** `argv` on the hosted environment: the C entry function
+  builds an array of `str` views (`{bytes, length}`) on its own stack, one per
+  argument, pointing at the strings the OS already placed in the process. There
+  is no heap allocation and no copying, and each length is a `strlen`. The array
+  lives until `main` returns. Arguments are not validated as UTF-8 in v1, so a
+  `str` from `argv` may hold invalid UTF-8.
+
+## C Compilation and Linking
+
+- [ ] The environment target's `c_source` (and imported stdlib `c_source` files) is
+  compiled at build time for the selected target. This requires a C compiler
+  such as Clang at build time.
+- [ ] The target's `llvm_triple` (and `cpu` if set) select the target.
+- [ ] Linking produces an ELF executable only. UF2, hex and raw binary output
+  are not part of v1. Flashing and conversion are external.
+- [ ] Imported stdlib modules can name system libraries in `link_libs`. `math`
+  names `m`, so `-lm` is passed to the linker when `math` is imported.
+- [ ] If the target has a `linker_script`, it is applied at link time.
+- [ ] **[OPEN]** C defines, the `extern("C")` ABI, and how the C compiler,
+  linker and `<installation>` directory are found. See Open Decisions.
+
+## Out of Scope for v1
+
+- Implementing any environment other than `xenon`.
+- Capability checking, negotiation and `#[require_capability]` enforcement.
+- Library manifests beyond the minimal `module.toml` (`ModuleManifest`), and dependency
+  resolution.
+- A `LinkPlan` abstraction.
+- A library registry class.
+- Prebuilt object-file matrices.
+- A separate target-triple parser.
+- A separate runtime-component system.
+- Freestanding (non-hosted) builds.
+- UF2, hex and raw binary output.
 
 ---
 
@@ -607,14 +1101,71 @@ still need your decision.
 | 15 | `type Counter;` | Draft only | `type Counter {}` |
 | 16 | Runtime scope | Open in `runtime.md` and `modules.md` | In scope everywhere |
 | 17 | Panic behaviour | Open in `runtime.md`. Draft defines it | Draft's definition (stderr, exit 101) |
+| 18 | Entry point | Language spec: `main` required in module `main` | Environment-defined `required_functions` list (`xenon`: `main::main(usize, *str) -> i32`, trailing parameters may be omitted) |
+| 19 | Module set | `source_files` only | `source_files` plus stdlib modules discovered under `<installation>/stdlib/`, parsed on import |
+| 20 | `runtime.xe` | One shared file | One per environment target (environment root for `xenon`) |
+| 21 | Output format | UF2, hex and binary considered | ELF only in v1 |
+| 22 | Debug/release key | `mode` considered | `optimisation = "debug" \| "release"` |
+| 23 | Prebuilt runtime objects | Per-target `.o` matrix considered | Environment C source compiled at build time |
+| 24 | Module declaration | Module rules required `module <name>;` in every file | Optional. A file without one contributes to the global scope, reachable as `name` or `::name` |
+| 25 | Build defaults | Unspecified | Environment `xenon`, target required, optimisation `debug`, output `build/` |
+| 26 | Capabilities | Enforced during semantic analysis | Metadata only in v1. `#[require_capability]` is reserved and unchecked |
+| 27 | Required functions | `[entry]` table mapping C symbols | `required_functions` list. Return type optional (`void` if omitted) |
+| 28 | `-lm` | v0.2 | v1, through `link_libs` in the stdlib `module.toml` |
+| 29 | Environment scope | `xenon` and `caesium` | Only `xenon` in v1. `caesium` is illustrative |
+| 30 | Naming | `profile`, `profile.toml`, `xenon.toml` (a "manifest"), stdlib `config.toml` | `environment` (concept, CLI flag, `[build]` key, struct, directories), `environment.toml` (manifest of the environment), `xenon.toml` (`ProjectConfig`, the project's build configuration), stdlib `module.toml` (`ModuleManifest`) |
+| 31 | Array syntax | `[T; N]` | `[N]T`, so `[2][3]f64` reads like its indexing |
+| 32 | Typed array literals | `[f32; 3] { … }` | Dropped. Annotation or defaulting gives the element type |
+| 33 | Hosted `main` | No arguments (language spec) vs `argc`/`argv` (example) | `main::main(usize, *str) -> i32` entry with a prefix rule, so `main()` is still valid |
+| 34 | `argv` representation | Unspecified | Stack array of `str` views built by the C entry function, no heap, not UTF-8 validated |
+| 35 | Required-function call | Unspecified | C runtime calls `main__main(argc, argv)`, the compiler emits the symbol with the full signature |
+| 36 | Import keyword | Sample program used `use math;` | `import` (no `use`), as already specified |
 
 # Open Decisions (need your call)
 
-1. Optional `module <name>;`. Proposal: an omitted declaration puts the file's
-   `pub` declarations in a "root". Recommendation: keep the declaration
-   required (explicit over implicit). If you want shorter single-file programs,
-   make an omitted declaration mean the module is named `main`, not a root.
-2. v0.2 casting design (parked): syntax (`T{ x }` is a candidate) and
+Resolved since the last round: optional `module` declarations (global scope),
+build defaults, capabilities as v1 metadata, the `required_functions` list,
+`-lm` in v1, `xenon`-only scope, the hosted `main` signature (argc/argv with a
+prefix rule), the C symbol naming for required functions, `[N]T` arrays, and
+the file and concept renames. What remains:
+
+1. **Global-scope files.** The core rule is decided. These corners are not:
+   - Privacy: a non-`pub` declaration in a global-scope file. Recommendation:
+     visible only within that file, matching "private by default".
+   - Imports: may a global-scope file contain `import`? Recommendation: no in
+     v1. It would make the global scope a node in the dependency graph, and
+     modules that use global names would form cycles with it.
+   - Collisions: the same name and signature declared twice in the global scope
+     (across files, or against `runtime.xe`) is a redeclaration error, as in a
+     module. Different signatures overload as usual.
+   - Lookup order: local scopes, then the current module, then the global
+     scope. A module's own declaration therefore hides a global one, and
+     `::name` reaches the global one.
+   Recommendation: accept all four as written.
+2. **Stdlib naming.** The loader enforces that `name` equals the directory name
+   and that names are unique. Still open: whether the module's own `module`
+   declaration must match (recommended: yes, checked in Phase 2), and whether
+   a user module may share a name with a stdlib module (recommended: error).
+3. **`link_libs`.** `ModuleManifest` gained an optional `link_libs` list so
+   `math` can request `-lm`. The alternative is always passing `-lm` on the
+   hosted environment. Recommendation: keep `link_libs`. It is one optional key.
+4. **C build details.**
+   - Pass `-DXENON_POINTER_BITS=<n>` to the C compiler so the C side can assert
+     its own sizes. Recommended. Capability defines are not needed while
+     capabilities are metadata.
+   - Define the `extern("C")` ABI: `str` crosses as a `(ptr, len)` pair and is
+     never returned as a struct, and `bool` is `i8` with zero extension.
+     Recommended.
+   - Locating tools and the installation. Recommendation: `clang` on `PATH`
+     with an `XENON_CC` override and a clear error naming a missing tool, and
+     `<installation>` found relative to the compiler executable with a
+     `XENON_HOME` override.
+5. **Output layout.** `output` is a directory. Recommendation: the final
+   executable is `<output>/<project name>` and object files go in
+   `<output>/obj/`. Project names containing spaces (as in the example
+   `"My Project"`) need a rule. Recommendation: restrict `name` to
+   identifier-like characters, or sanitise it for the file name.
+6. **Parked.** v0.2 casting design: syntax (`T{ x }` is a candidate) and
    out-of-range behaviour (checked and panicking is recommended).
 
 # Doc Fixes Needed in the Scrap Documents
@@ -646,25 +1197,180 @@ still need your decision.
 - `references-and-pointers.md` §2.2: replace the open question with the decided
   rules, and reserve `raw` in §3.1.
 - `runtime.md`: write the panic section from the Runtime items above.
-- `overview.md` links `lexical.md`, which still has to be written.
+- `types.md`, `literals.md`: arrays are `[N]T`, not `[T; N]`, and the typed
+  array literal form is removed. List literals take their element type from the
+  annotation or from defaulting.
+- `functions.md` (`main`) and `runtime.md`: the hosted entry is
+  `main::main(usize, *str) -> i32` with the prefix rule. Describe the `argv`
+  `str` array, which is not validated as UTF-8.
+- `overview.md` links `lexical.md`, which still has to be written. Its "execution
+  begins at `main`" line becomes "execution begins at a function the environment requires".
+- `functions.md` (`main`): required functions are environment-defined. Remove the
+  language-level requirement for `main`.
+- `runtime.md`: describe runtime behaviour per environment. Panic output, `exit` and
+  exit codes apply to the hosted `xenon` environment. State that `runtime.xe` is a
+  global-scope file.
+- `modules.md`: add standard-library modules (discovered from `stdlib/`, parsed
+  on import) to the module-set rules. Make `module <name>;` optional, and
+  document the global scope, the leading `::` path and the lookup order.
+- `functions.md` / annotations: add `#[require_capability("name")]` as reserved
+  syntax with no effect in v1.
+- New docs to write: compiler pipeline, configuration (`xenon.toml`,
+  `environment.toml`, stdlib `module.toml`), environments, standard library, capabilities.
 
-# Compiler Driver Follow-ups (from reviewing `compiler_driver.*` and `compiler.cpp`)
+# Future Syntax
 
-- `ModuleNamespaceTree::add_module` silently overwrites a module declared
-  twice. It should report a duplicate-module error.
-- Namespace-only intermediate nodes count as modules in `dfs_validate_module`,
-  so `import verification;` resolves if only `verification::age_verification`
-  exists. Require `dep_module->ast.has_value()`.
-- `split_name` silently drops a lone `:`. Reject it instead.
-- No check that exactly one `main` module exists (driver or sema).
-- `compiler.cpp` is a second, divergent `ModuleNamespaceTree` and `Compiler`
-  (namespace `xenon::compiler`):
-  - It uses `.` separators and file stems for names.
-  - Its DFS leaves `path` and `state` stale on early return, which is the bug
-    the driver's comment describes.
-  - Its `get_module` compares `part == parts.back()`, which breaks on `a::a`.
-  - Its `init_project` writes `fn main()` instead of `func main()`.
-  - Delete it, or port its optional-based CLI-override design (`TomlSettings` /
-    `ResolvedConfig`) into the driver in place of the `_explicit` flags.
-- `parse_string_array` exists in both files. The `compiler.cpp` version splits
-  on commas inside quoted strings.
+```
+import math;
+import physics;
+
+const $GRAVITY: f64 = 9.80665;
+const $PARTICLE_COUNT: usize = 3;
+const $TIME_STEP: f64 = 0.016;
+
+// A generic two-dimensional vector.
+type Vector2<T: Numeric>
+    T :: x;
+    T :: y;
+end type Vector2
+
+impl<T: Numeric> Vector2<T>
+
+    func zero() -> Vector2<T>
+        return Vector2<T> {
+            x: T::zero(),
+            y: T::zero()
+        };
+    end func zero
+
+    func magnitude(&self) -> T
+        return math::sqrt(self.x ** 2 + self.y ** 2);
+    end func magnitude
+
+    func scale(&mut self, factor: T)
+        self.x = self.x * factor;
+        self.y = self.y * factor;
+    end func scale
+
+    func add(&mut self, other: &Vector2<T>)
+        self.x = self.x + other.x;
+        self.y = self.y + other.y;
+    end func add
+
+end impl Vector2
+
+// Particle representation.
+type Particle
+    f64 :: mass;
+    Vector2<f64> :: position;
+    Vector2<f64> :: velocity;
+end type Particle
+
+impl Particle
+
+    func kinetic_energy(&self) -> f64
+        let speed: f64 = self.velocity%magnitude();
+        return 0.5 * self.mass * speed ** 2;
+    end func kinetic_energy
+
+    func accelerate(&mut self, acceleration: &Vector2<f64>, dt: f64)
+        self.velocity.x = self.velocity.x + acceleration.x * dt;
+        self.velocity.y = self.velocity.y + acceleration.y * dt;
+    end func accelerate
+
+    func update(&mut self, dt: f64)
+        self.position.x = self.position.x + self.velocity.x * dt;
+        self.position.y = self.position.y + self.velocity.y * dt;
+    end func update
+
+end impl Particle
+
+// Calculate the dot product of two vectors.
+func dot<T: Numeric>(a: &Vector2<T>, b: &Vector2<T>) -> T
+    return a.x * b.x + a.y * b.y;
+end func dot
+
+// Compile-time architecture specialization.
+$if TARGET_ARCH == "AVX2"
+
+    const $VECTOR_BACKEND: str = "AVX2";
+
+$else
+
+    const $VECTOR_BACKEND: str = "SCALAR";
+
+$end
+
+// Program entry point.
+func main() -> i32
+
+    let mut particles: [$PARTICLE_COUNT]Particle = [
+        Particle {
+            mass: 2.0,
+            position: Vector2<f64> { x: 0.0, y: 10.0 },
+            velocity: Vector2<f64> { x: 3.0, y: 0.0 }
+        },
+
+        Particle {
+            mass: 1.5,
+            position: Vector2<f64> { x: 5.0, y: 20.0 },
+            velocity: Vector2<f64> { x: -1.0, y: 2.0 }
+        },
+
+        Particle {
+            mass: 3.0,
+            position: Vector2<f64> { x: 10.0, y: 15.0 },
+            velocity: Vector2<f64> { x: 0.0, y: -1.0 }
+        }
+    ];
+
+    let gravity: Vector2<f64> = Vector2 {
+        x: 0.0,
+        y: -$GRAVITY
+    };
+
+    println("Xenon Particle Simulation");
+    println("Backend: {}", $VECTOR_BACKEND);
+    println("Particles: {}", $PARTICLE_COUNT);
+
+    // Simulation loop.
+    do step in 0..100
+
+        do i in 0..$PARTICLE_COUNT
+
+            particles[i].accelerate(&gravity, $TIME_STEP);
+            particles[i].update($TIME_STEP);
+
+        end do i
+
+    end do step
+
+    // Display simulation results.
+    println("");
+    println("Simulation results:");
+
+    do i in 0..$PARTICLE_COUNT
+
+        let particle: &Particle = &particles[i]
+
+        println("Particle {}", i);
+        println("  Position: ({}, {})",
+            particle.position.x,
+            particle.position.y
+        );
+
+        println("  Velocity: ({}, {})",
+            particle.velocity.x,
+            particle.velocity.y
+        );
+
+        println("  Kinetic energy: {} J",
+            particle.kinetic_energy()
+        );
+
+    end do i
+
+    return 0;
+
+end func main
+```
