@@ -1,2 +1,0 @@
-/usr/bin/ar qc libxenon_common.a CMakeFiles/xenon_common.dir/xec/src/common/source/source_file.cpp.o CMakeFiles/xenon_common.dir/xec/src/common/source/source_file_manager.cpp.o CMakeFiles/xenon_common.dir/xec/src/common/diagnostics/diagnostic_collector.cpp.o
-/usr/bin/ranlib libxenon_common.a

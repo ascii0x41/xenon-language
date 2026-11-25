@@ -1,1 +1,0 @@
-/home/ascii/.local/share/xenon/bin/xec
