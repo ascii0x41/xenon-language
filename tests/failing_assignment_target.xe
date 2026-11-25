@@ -1,0 +1,3 @@
+func broken() {
+    a + b = c;
+}

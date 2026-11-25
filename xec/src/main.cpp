@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
 
 
         xenon::CompilationResult result = xenon::compiler::Compiler::compile(
-            resolved, args.command == "build", args.show_ast);
+            resolved, args.command == "build");
 
         diagnostic_collector.merge(result.diagnostics());
 

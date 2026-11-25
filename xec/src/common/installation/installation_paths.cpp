@@ -95,7 +95,7 @@ fs::path InstallationPaths::find_executable() {
 
 bool InstallationPaths::is_valid_root(const fs::path& path) {
 
-    return fs::is_directory(path / "profiles")
+    return fs::is_directory(path / "environments")
         && fs::is_directory(path / "stdlib");
 }
 
@@ -114,7 +114,7 @@ InstallationPaths InstallationPaths::discover() {
         root = DEFAULT_HOME;
     }
 
-    if (!fs::is_directory(root / "profiles") ||
+    if (!fs::is_directory(root / "environments") ||
         !fs::is_directory(root / "stdlib")) {
         throw std::runtime_error(
             "Invalid Xenon installation directory: " + root.string()
@@ -124,7 +124,7 @@ InstallationPaths InstallationPaths::discover() {
     return InstallationPaths{
         .executable = find_executable(),
         .root = root,
-        .profiles = root / "profiles",
+        .environments = root / "environments",
         .stdlib = root / "stdlib",
     };
 }

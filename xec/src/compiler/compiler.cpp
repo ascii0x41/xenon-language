@@ -1,13 +1,11 @@
 #include "compiler/compiler.h"
 #include "common/source/source_file_manager.h"
 #include "compiler/compilation_result.h"
-#include "ast/yaml_printer.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 
 #include <utility>
 #include <vector>
-#include <iostream>
 
 namespace xenon::compiler {
 
@@ -50,12 +48,6 @@ namespace xenon::compiler {
         diagnostics::DiagnosticCollector diagnostics;
 
         auto parser_results = parse_sources();
-
-        if (show_ast_) {
-            for (std::size_t i = 0; i < parser_results.size(); ++i) {
-                ast::print_yaml(std::cout, config_.source_files[i], parser_results[i], i == 0);
-            }
-        }
     
         for (const auto& parser_result : parser_results) {
             if (!parser_result.success()) {

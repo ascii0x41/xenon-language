@@ -19,7 +19,7 @@ namespace xenon::ast {
         Block, ExprStmt, VarDecl, AssignStmt, IncDecStmt, ReturnStmt, BreakStmt,
         ContinueStmt, IfStmt, WhileStmt, DoWhileStmt, DoStmt, CtIfStmt,
         SourceFile, ModuleDecl, ImportDecl, TypeDecl, FieldDecl, ImplDecl, FuncDecl,
-        Param, SelfParam, CtIfItem, CtIfField, CtIfMember, ErrorExpr, ErrorStmt,
+        Param, SelfParam, MethodDecl, CtIfItem, CtIfField, CtIfMember, ErrorExpr, ErrorStmt,
         ErrorItem, ErrorType
     };
 
@@ -104,6 +104,7 @@ namespace xenon::ast {
             case Kind::FuncDecl: return "FuncDecl";
             case Kind::Param: return "Param";
             case Kind::SelfParam: return "SelfParam";
+            case Kind::MethodDecl: return "MethodDecl";
             case Kind::CtIfItem: return "CtIfItem";
             case Kind::CtIfField: return "CtIfField";
             case Kind::CtIfMember: return "CtIfMember";
@@ -574,6 +575,24 @@ namespace xenon::ast {
         Param(source::Span span, TypePtr param_type, DeclNamePtr param_name)
             : Node(Kind::Param, span), type(std::move(param_type)), name(std::move(param_name)) {}
     };
+    struct MethodDecl final : Node {
+        bool is_public;
+        source::Span name;
+        NodePtr self_param;
+        std::vector<NodePtr> parameters;
+        TypePtr return_type;
+        std::unique_ptr<Block> body;
+        DocComments doc_comments;
+        AttributeLists attributes;
+        MethodDecl(source::Span span, bool is_pub, source::Span method_name,
+                   NodePtr receiver = nullptr, std::vector<NodePtr> params = {},
+                   TypePtr result = nullptr, std::unique_ptr<Block> method_body = nullptr,
+                   DocComments docs = {}, AttributeLists attrs = {})
+            : Node(Kind::MethodDecl, span), is_public(is_pub), name(method_name),
+              self_param(std::move(receiver)), parameters(std::move(params)),
+              return_type(std::move(result)), body(std::move(method_body)),
+              doc_comments(std::move(docs)), attributes(std::move(attrs)) {}
+    };
     struct SelfParam final : Node {
         SelfParamKind form;
         SelfParam(source::Span span, SelfParamKind receiver_form) : Node(Kind::SelfParam, span), form(receiver_form) {}
@@ -675,6 +694,7 @@ namespace xenon::ast {
     XENON_AST_FACTORY(FuncDecl)
     XENON_AST_FACTORY(Param)
     XENON_AST_FACTORY(SelfParam)
+    XENON_AST_FACTORY(MethodDecl)
     XENON_AST_FACTORY(CtIfItem)
     XENON_AST_FACTORY(CtIfField)
     XENON_AST_FACTORY(CtIfMember)

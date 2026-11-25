@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.20)
 
 project(
@@ -6,38 +7,24 @@ project(
     LANGUAGES CXX
 )
 
-# --------------------------------------------------
+# ==================================================
 # Options
-# --------------------------------------------------
+# ==================================================
 
-option(ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
-option(WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
+option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(XENON_BUILD_TOOLS "Build Xenon development tools and smoke tests" OFF)
 
-set(
-    DEFAULT_TARGET
-    "unknown"
-    CACHE STRING
-    "Default Xenon target"
-)
-
-set(
-    XEC_VERSION
-    "unknown"
-    CACHE STRING
-    "Xenon compiler version"
-)
-
-# --------------------------------------------------
-# Global settings
-# --------------------------------------------------
+set(DEFAULT_TARGET "unknown" CACHE STRING "Default Xenon target")
+set(XEC_VERSION "${PROJECT_VERSION}" CACHE STRING "Xenon compiler version")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# --------------------------------------------------
-# Dependencies
-# --------------------------------------------------
-
 include(FetchContent)
+
+# ==================================================
+# Dependencies
+# ==================================================
 
 FetchContent_Declare(
     tomlplusplus
@@ -47,91 +34,26 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(tomlplusplus)
 
-# --------------------------------------------------
-# Sources
-# --------------------------------------------------
+# ==================================================
+# Build configuration
+# ==================================================
 
-file(
-    GLOB_RECURSE XENON_SOURCES
-    CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/xec/src/*.cpp"
-)
+function(xenon_configure_target target)
 
-add_executable(
-    xec
-    "${PROJECT_SOURCE_DIR}/xec/src/main.cpp"
-    ${XENON_SOURCES}
-)
+    target_compile_features(${target} PRIVATE cxx_std_20)
 
-
-# --------------------------------------------------
-# C++ standard
-# --------------------------------------------------
-
-target_compile_features(
-    xec
-    PRIVATE
-        cxx_std_20
-)
-
-# --------------------------------------------------
-# Includes
-# --------------------------------------------------
-
-target_include_directories(
-    xec
-    PRIVATE
-        "${PROJECT_SOURCE_DIR}/xec/src"
-)
-
-# --------------------------------------------------
-# Compile definitions
-# --------------------------------------------------
-
-target_compile_definitions(
-    xec
-    PRIVATE
-        XEC_VERSION="${PROJECT_VERSION}"
-        DEFAULT_TARGET="${DEFAULT_TARGET}"
-        DEFAULT_HOME="${CMAKE_INSTALL_PREFIX}/share/xenon"
-)
-
-# --------------------------------------------------
-# Libraries
-# --------------------------------------------------
-
-target_link_libraries(
-    xec
-    PRIVATE
-        tomlplusplus::tomlplusplus
-)
-
-# --------------------------------------------------
-# Compiler warnings
-# --------------------------------------------------
-
-if(MSVC)
-                                
-    target_compile_options(
-        xec
-        PRIVATE
+    if(MSVC)
+        target_compile_options(${target} PRIVATE
             /W4
             /permissive-
-    )
-
-    if(WARNINGS_AS_ERRORS)
-        target_compile_options(
-            xec
-            PRIVATE
-                /WX
         )
-    endif()
 
-else()
+        if(WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
 
-    target_compile_options(
-        xec
-        PRIVATE
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        target_compile_options(${target} PRIVATE
             -Wall
             -Wextra
             -Wpedantic
@@ -139,91 +61,159 @@ else()
             -Wconversion
             -Wnon-virtual-dtor
             -Wold-style-cast
-    )
+        )
 
-    if(WARNINGS_AS_ERRORS)
-        target_compile_options(
-            xec
-            PRIVATE
-                -Werror
+        if(WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+
+    # Sanitizers
+    if(ENABLE_ASAN AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        target_compile_options(${target} PRIVATE
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
+        )
+
+        target_link_options(${target} PRIVATE
+            -fsanitize=address,undefined
         )
     endif()
 
-endif()
+endfunction()
 
-# --------------------------------------------------
-# Build configuration
-# --------------------------------------------------
+# ==================================================
+# Shared sources
+# ==================================================
 
-target_compile_options(
-    xec
-    PRIVATE
-        $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-g>
-        $<$<AND:$<CONFIG:Release>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-O2>
+add_library(xenon_common STATIC
+    xec/src/common/source/source_file.cpp
+    xec/src/common/source/source_file_manager.cpp
+    xec/src/common/diagnostics/diagnostic_collector.cpp
 )
 
-# --------------------------------------------------
-# Sanitizers
-# --------------------------------------------------
+target_include_directories(xenon_common PUBLIC
+    "${PROJECT_SOURCE_DIR}/xec/src"
+)
 
-if((ENABLE_ASAN OR CMAKE_BUILD_TYPE MATCHES "Debug") AND NOT MSVC)
+target_link_libraries(xenon_common PUBLIC
+    tomlplusplus::tomlplusplus
+)
 
-    target_compile_options(
-        xec
-        PRIVATE
-            -fsanitize=address,undefined
-            -fno-omit-frame-pointer
-    )
+xenon_configure_target(xenon_common)
 
-    target_link_options(
-        xec
-        PRIVATE
-            -fsanitize=address,undefined
-    )
+# ==================================================
+# Main compiler
+# ==================================================
 
-endif()
+file(GLOB_RECURSE XEC_SOURCES CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/xec/src/*.cpp"
+)
 
-# --------------------------------------------------
-# Configuration summary
-# --------------------------------------------------
-
-message(STATUS "Xenon compiler version: ${PROJECT_VERSION}")
-message(STATUS "Default target:   ${DEFAULT_TARGET}")
-
-# Lexer golden-test CLI
-add_executable(xenon-lex tools/xenon-lex.cpp)
-target_compile_features(xenon-lex PRIVATE cxx_std_20)
-target_include_directories(xenon-lex PRIVATE "${PROJECT_SOURCE_DIR}/xec/src")
-target_sources(xenon-lex PRIVATE
+list(REMOVE_ITEM XEC_SOURCES
+    "${PROJECT_SOURCE_DIR}/xec/src/main.cpp"
     "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file.cpp"
     "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file_manager.cpp"
     "${PROJECT_SOURCE_DIR}/xec/src/common/diagnostics/diagnostic_collector.cpp"
-    "${PROJECT_SOURCE_DIR}/xec/src/lexer/lexer.cpp"
-    "${PROJECT_SOURCE_DIR}/xec/src/lexer/token.cpp")
-target_link_libraries(xenon-lex PRIVATE tomlplusplus::tomlplusplus)
+)
 
-if(NOT MSVC)
-    target_compile_options(xenon-lex PRIVATE -Wall -Wextra -Wpedantic)
-    if(CMAKE_BUILD_TYPE MATCHES "Debug" OR ENABLE_ASAN)
-        target_compile_options(xenon-lex PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-        target_link_options(xenon-lex PRIVATE -fsanitize=address,undefined)
-    endif()
+add_executable(xec
+    xec/src/main.cpp
+    ${XEC_SOURCES}
+)
+
+install(
+    TARGETS xec
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+
+target_include_directories(xec PRIVATE
+    "${PROJECT_SOURCE_DIR}/xec/src"
+)
+
+target_compile_definitions(xec PRIVATE
+    XEC_VERSION="${XEC_VERSION}"
+    DEFAULT_TARGET="${DEFAULT_TARGET}"
+    DEFAULT_HOME="${CMAKE_INSTALL_PREFIX}/share/xenon"
+)
+
+target_link_libraries(xec PRIVATE
+    xenon_common
+    tomlplusplus::tomlplusplus
+)
+
+xenon_configure_target(xec)
+
+# ==================================================
+# Development tools
+# ==================================================
+
+if(XENON_BUILD_TOOLS)
+
+    add_executable(xenon-parse
+        tools/xenon-parse.cpp
+        xec/src/lexer/lexer.cpp
+        xec/src/lexer/token.cpp
+        xec/src/parser/parser.cpp
+    )
+
+    target_include_directories(xenon-parse PRIVATE
+        "${PROJECT_SOURCE_DIR}/xec/src"
+    )
+    target_link_libraries(xenon-parse PRIVATE xenon_common)
+    xenon_configure_target(xenon-parse)
+
+    # Lexer CLI
+    add_executable(xenon-lex
+        tools/xenon-lex.cpp
+        xec/src/lexer/lexer.cpp
+        xec/src/lexer/token.cpp
+    )
+
+    target_include_directories(xenon-lex PRIVATE
+        "${PROJECT_SOURCE_DIR}/xec/src"
+    )
+
+    target_link_libraries(xenon-lex PRIVATE
+        xenon_common
+    )
+
+    xenon_configure_target(xenon-lex)
+
+
+    # AST smoke test
+    add_executable(xenon-ast
+        tools/xenon_ast.cpp
+    )
+
+    target_link_libraries(xenon-ast PRIVATE
+        xenon_common
+    )
+
+    xenon_configure_target(xenon-ast)
+
+    
+    # ==================================================
+    # Testing
+    # ==================================================
+    
+    enable_testing()
+    
+    # Add actual tests here using add_test().
+    # Example:
+    # add_test(NAME xenon-ast COMMAND xenon-ast)
 endif()
 
-# AST library smoke test
-enable_testing()
-add_executable(test-xenon-ast test/xenon_ast.cpp
-    "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file.cpp"
-    "${PROJECT_SOURCE_DIR}/xec/src/common/source/source_file_manager.cpp")
-set_target_properties(test-xenon-ast PROPERTIES
-    OUTPUT_NAME xenon-ast)
-target_compile_features(test-xenon-ast PRIVATE cxx_std_20)
-target_include_directories(test-xenon-ast PRIVATE "${PROJECT_SOURCE_DIR}/xec/src")
-if(NOT MSVC)
-    target_compile_options(test-xenon-ast PRIVATE -Wall -Wextra -Wpedantic)
-    if(CMAKE_BUILD_TYPE MATCHES "Debug" OR ENABLE_ASAN)
-        target_compile_options(test-xenon-ast PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-        target_link_options(test-xenon-ast PRIVATE -fsanitize=address,undefined)
-    endif()
-endif()
-add_test(NAME xenon-ast COMMAND test-xenon-ast "${PROJECT_SOURCE_DIR}/tests/astlib_smoke.xe")
+# ==================================================
+# Configuration summary
+# ==================================================
+
+message(STATUS "")
+message(STATUS "========== Xenon Configuration ==========")
+message(STATUS "Version:          ${XEC_VERSION}")
+message(STATUS "Default target:   ${DEFAULT_TARGET}")
+message(STATUS "C++ standard:     C++20")
+message(STATUS "Sanitizers:       ${ENABLE_ASAN}")
+message(STATUS "Warnings as errors: ${WARNINGS_AS_ERRORS}")
+message(STATUS "=========================================")
+message(STATUS "")

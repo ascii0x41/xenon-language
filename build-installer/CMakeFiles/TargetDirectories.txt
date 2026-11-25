@@ -1,0 +1,14 @@
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/xenon_common.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/xec.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/edit_cache.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/rebuild_cache.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/list_install_components.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/install.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/install/local.dir
+/home/ascii/Projects/xenon-language/build-installer/CMakeFiles/install/strip.dir
+/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/CMakeFiles/edit_cache.dir
+/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/CMakeFiles/rebuild_cache.dir
+/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/CMakeFiles/list_install_components.dir
+/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/CMakeFiles/install.dir
+/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/CMakeFiles/install/local.dir
+/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/CMakeFiles/install/strip.dir

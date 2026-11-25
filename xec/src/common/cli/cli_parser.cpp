@@ -115,8 +115,6 @@ config::CLIArgs CLIParser::parse_cli(int argc, char* argv[]) {
             args.command = "help";
         } else if (arg == "--version") {
             args.command = "version";
-        } else if (arg == "--show-ast") {
-            args.show_ast = true;
         } else if (arg == "--target") {
             if (++i >= argc) {
                 throw std::invalid_argument("--target requires a value");

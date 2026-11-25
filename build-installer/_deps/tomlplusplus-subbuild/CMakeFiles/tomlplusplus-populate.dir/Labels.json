@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/CMakeFiles/tomlplusplus-populate"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/CMakeFiles/tomlplusplus-populate.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/CMakeFiles/tomlplusplus-populate-complete.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-build.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-configure.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-download.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-install.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-mkdir.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-patch.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-test.rule"
+		},
+		{
+			"file" : "/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-subbuild/tomlplusplus-populate-prefix/src/tomlplusplus-populate-stamp/tomlplusplus-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"tomlplusplus-populate"
+		],
+		"name" : "tomlplusplus-populate"
+	}
+}

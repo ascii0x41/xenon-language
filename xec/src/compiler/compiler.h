@@ -11,24 +11,22 @@ namespace xenon::compiler {
 
 class Compiler {
 public:
-    explicit Compiler(const config::ResolvedConfigs& config, bool build, bool show_ast = false)
-        : config_(config), build_(build), show_ast_(show_ast) {}
+    explicit Compiler(const config::ResolvedConfigs& config, bool build)
+        : config_(config), build_(build) {}
 
     xenon::CompilationResult compile();
 
     static xenon::CompilationResult compile(
         const config::ResolvedConfigs& config,
-        bool build,
-        bool show_ast = false
+        bool build
     ) {
-        return Compiler(config, build, show_ast).compile();
+        return Compiler(config, build).compile();
     }
 
 private:
     const config::ResolvedConfigs& config_;
     std::vector<Module> modules_;
     bool build_;
-    bool show_ast_;
 
     /**
      * Invoke Parser

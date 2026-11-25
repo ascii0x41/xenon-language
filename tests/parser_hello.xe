@@ -1,0 +1,13 @@
+//! This program says hello!
+module main;
+
+//! Main function
+func main(usize :: argc, *str :: argv) -> i32 {
+    if argc != 2 {
+        $println("Usage: program <name>");
+        return 2;
+    }
+
+    $println("Hello, {}!", argv[1]);
+    return 0;
+}

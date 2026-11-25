@@ -6,6 +6,7 @@ std::string_view to_string(TokenKind k) noexcept {
 #define S(A,B) case TokenKind::A: return B
     switch(k) {
         S(Identifier,"Identifier"); S(Underscore,"Underscore"); S(PctIdent,"PctIdent"); S(CtIdent,"CtIdent");
+        S(DocComment,"//!"); S(AttributeStart,"$[");
         S(Module,"Module"); S(Import,"Import"); S(Type,"Type"); S(Impl,"Impl"); S(Func,"Func");
         S(Let,"Let"); S(Static,"Static"); S(Const,"Const"); S(Mut,"Mut"); S(Auto,"Auto");
         S(Pub,"Pub"); S(Self,"Self"); S(Return,"Return"); S(If,"If"); S(Else,"Else");

@@ -1,7 +1,5 @@
 #include "lexer/lexer.h"
 
-#include "character_utils.h"
-
 #include <unordered_set>
 #include <unordered_map>
 #include <string_view>
@@ -153,7 +151,11 @@ void Lexer::scan_rune(TokenStream& out, std::vector<diagnostics::Diagnostic>& ds
 void Lexer::scan(TokenStream& out, std::vector<diagnostics::Diagnostic>& ds) {
     while (is_at_end()) return;
     char c=advance();
-    if(c=='%'||c=='$') { --current_; scan_sigiled(out,ds,c=='%'); return; }
+    if(c=='$') {
+        if(peek()=='[') { ++current_; emit(out,TokenKind::AttributeStart,start_,current_); return; }
+        --current_; scan_sigiled(out,ds,false); return;
+    }
+    if(c=='%') { --current_; scan_sigiled(out,ds,true); return; }
     if(c=='_' && ident_continue(peek())) { --current_; scan_identifier(out); return; }
     if(ident_start(c)) { --current_; scan_identifier(out); return; }
     if(digit(c)) { --current_; scan_number(out,ds); return; }
@@ -176,7 +178,18 @@ void Lexer::scan(TokenStream& out, std::vector<diagnostics::Diagnostic>& ds) {
       case '-': if(match('>')) emit(out,TokenKind::Arrow,start_,current_); else if(match('-')) emit(out,TokenKind::MinusMinus,start_,current_); else if(match('=')) emit(out,TokenKind::MinusEq,start_,current_); else emit(out,TokenKind::Minus,start_,current_); break;
       case '*': if(match('*')) { if(match('=')) emit(out,TokenKind::DoubleStarEq,start_,current_); else emit(out,TokenKind::DoubleStar,start_,current_); } else if(match('=')) emit(out,TokenKind::StarEq,start_,current_); else emit(out,TokenKind::Star,start_,current_); break;
       // TODO(OPEN-BLOCK-COMMENTS): block comments are undecided in the EBNF; this lexer only skips // lines.
-      case '/': if(match('/')) { while(peek()!='\n' && !is_at_end()) ++current_; } else if(match('=')) emit(out,TokenKind::SlashEq,start_,current_); else emit(out,TokenKind::Slash,start_,current_); break;
+      case '/':
+        if(match('/')) {
+            if(peek()=='!') {
+                ++current_;
+                while(peek()!='\n' && !is_at_end()) ++current_;
+                emit(out,TokenKind::DocComment,start_,current_);
+            } else {
+                while(peek()!='\n' && !is_at_end()) ++current_;
+            }
+        } else if(match('=')) emit(out,TokenKind::SlashEq,start_,current_);
+        else emit(out,TokenKind::Slash,start_,current_);
+        break;
       case '=': if(match('=')) emit(out,TokenKind::EqEq,start_,current_); else emit(out,TokenKind::Eq,start_,current_); break;
       case '!': if(match('=')) emit(out,TokenKind::BangEq,start_,current_); else emit(out,TokenKind::Bang,start_,current_); break;
       case '<': if(match('<')) { if(match('=')) emit(out,TokenKind::LessLessEq,start_,current_); else emit(out,TokenKind::LessLess,start_,current_); } else if(match('=')) emit(out,TokenKind::LessEq,start_,current_); else emit(out,TokenKind::Less,start_,current_); break;

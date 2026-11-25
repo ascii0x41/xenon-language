@@ -3,7 +3,7 @@
 namespace xenon::lexer {
 
 enum class TokenKind {
-    Identifier, Underscore, PctIdent, CtIdent,
+    Identifier, Underscore, PctIdent, CtIdent, DocComment, AttributeStart,
     Module, Import, Type, Impl, Func, Let, Static, Const, Mut, Auto, Pub,
     Self, Return, If, Else, While, Do, In, Break, Continue,
     True, False, Nullptr, BuiltinType,

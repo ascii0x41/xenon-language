@@ -1,0 +1,3 @@
+func broken() {
+    let i32 :: x = a % b;
+}

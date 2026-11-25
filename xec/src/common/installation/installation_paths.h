@@ -9,7 +9,7 @@ namespace xenon::installation {
 struct InstallationPaths {
     fs::path executable;
     fs::path root;
-    fs::path profiles;
+    fs::path environments;
     fs::path stdlib;
 
     static InstallationPaths discover();

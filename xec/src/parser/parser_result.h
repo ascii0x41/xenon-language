@@ -1,7 +1,6 @@
 #pragma once
 
-#include "ast/ast.h"
-#include "ast/header.h"
+#include "astlib/astlib.h"
 #include "common/result/result.h"
 
 #include <memory>
@@ -9,8 +8,7 @@
 namespace xenon::parser {
 
     struct Output {
-        std::unique_ptr<ast::AST> ast;
-        ast::HeaderInfo header;
+        ast::SourceFilePtr ast;
     };
 
     using ParserOutput = result::Output<Output>;

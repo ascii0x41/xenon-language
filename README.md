@@ -43,8 +43,9 @@ References are not lifetime-checked. This is planned for a future version.
 ### Build the compiler
 
 ```bash
-python installer.py
-```
+git clone https://github.com/ascii0x41/xenon-language.git
+cd xenon-language
+python installer.py```
 
 This produces the compiler executable `xec` that is now usable in the terminal
 

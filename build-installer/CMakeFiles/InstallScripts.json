@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/ascii/Projects/xenon-language/build-installer/cmake_install.cmake",
+		"/home/ascii/Projects/xenon-language/build-installer/_deps/tomlplusplus-build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

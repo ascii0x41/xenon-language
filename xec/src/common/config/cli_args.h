@@ -20,7 +20,6 @@ namespace xenon::config {
         std::optional<fs::path> output;
 
         bool show_color = true;
-        bool show_ast = false;
     };
 
 } // namespace xenon::config

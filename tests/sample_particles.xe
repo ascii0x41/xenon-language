@@ -1,0 +1,42 @@
+module main;
+
+const f64 :: $K_E = 8.9875517923e9;
+const f64 :: $DT = 0.001;
+
+type %Vector2 {
+    f64 :: x;
+    f64 :: y;
+}
+
+impl %Vector2 {
+    func length(&self) -> f64 {
+        return sqrt(self%x ** 2 + self%y ** 2);
+    }
+}
+
+type %Particle {
+    %Vector2 :: position;
+    %Vector2 :: velocity;
+    f64 :: charge;
+    f64 :: mass;
+}
+
+func coulomb_force(&%Particle :: a, &%Particle :: b) -> %Vector2 {
+    let f64 :: dx = a%position%x - b%position%x;
+    let f64 :: dy = a%position%y - b%position%y;
+    let f64 :: distance_squared = dx ** 2 + dy ** 2;
+    let f64 :: distance = sqrt(distance_squared);
+    let f64 :: force_magnitude = $K_E * a%charge * b%charge / distance_squared;
+    let f64 :: fx = force_magnitude * dx / distance;
+    let f64 :: fy = force_magnitude * dy / distance;
+    return %Vector2 { x: fx, y: fy };
+}
+
+func main() {
+    let mut %Particle :: electron = %Particle {
+        position: %Vector2 { x: -1.0, y: 0.0 },
+        velocity: %Vector2 { x: 0.0, y: 0.0 },
+        charge: -1.602176634e-19,
+        mass: 9.1093837e-31
+    };
+}

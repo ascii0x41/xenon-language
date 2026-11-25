@@ -1,0 +1,18 @@
+module main;
+
+$[inline]
+func features() {
+    let i32 :: x = -x ** 2;
+    let i32 :: y = 2 ** -1;
+    let i32 :: z = -5;
+    let i32 :: a = -(5);
+    let i32 :: c = a ? b : c ? d : e;
+    let **i32 :: p;
+    let &&i32 :: r;
+    let [3]f64 :: v = [3]f64 { 1.0, 2.0, 3.0 };
+    $ref(mut x);
+    $cast(f64, n);
+    do { } while c;
+    do auto :: _ in range(0, n) { }
+    if (%T { x: 1 }) { }
+}

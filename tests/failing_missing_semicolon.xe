@@ -1,0 +1,3 @@
+func broken() {
+    return 1
+}

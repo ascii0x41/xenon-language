@@ -16,115 +16,84 @@
 
 namespace xenon::parser {
 
-    class Parser {
-    public:
-        static ParserOutput parse(const lexer::TokenStream& token_stream, source::FileID fid) {
-            return Parser(token_stream, fid).parse();
-        }
+class Parser {
+public:
+    static ParserOutput parse(const lexer::TokenStream& tokens, source::FileID fid);
 
-    private:
-        struct Metadata {
-            std::string doc;
-            std::optional<source::Span> doc_span;
-            std::vector<ast::Attribute> attributes;
-            std::optional<source::Span> attributes_span;
-        };
-
-        explicit Parser(const lexer::TokenStream& token_stream, source::FileID fid)
-            : token_stream_(token_stream), fid_(fid), token_stream_cursor_(0),
-              eof_token_{
-                  .kind = lexer::TokenKind::EOF_TOKEN,
-                  .span = source::Span{
-                      .file = fid,
-                      .start = token_stream.empty() ? 0 : token_stream.back().span.end,
-                      .end = token_stream.empty() ? 0 : token_stream.back().span.end
-                  }
-              } {}
-
-        ParserOutput parse();
-
-        const lexer::TokenStream& token_stream_;
-        source::FileID fid_;
-        std::size_t token_stream_cursor_;
-        lexer::Token eof_token_;
-        Metadata pending_metadata_;
-        std::string module_doc_;
-        bool no_struct_literal_ = false;
-
-        source::Span location() const;
-        bool is_at_eof() const;
-
-        const lexer::Token& peek() const;
-        const lexer::Token& peek_next() const;
-
-        const lexer::Token& advance();
-        const lexer::Token& previous() const;
-
-        bool match(lexer::TokenKind kind);
-        bool check(lexer::TokenKind kind) const;
-        bool accept(lexer::TokenKind kind);
-        result::Result<lexer::Token> expect(lexer::TokenKind kind, const std::string& message);
-        result::Result<lexer::Token> expect_semicolon();
-
-        result::Result<ast::HeaderInfo> parse_header();
-        result::Result<ast::NamePtr> parse_module_path();
-
-        result::Result<ast::NamePtr> parse_name();
-        result::Result<Metadata> parse_metadata();
-        result::Result<std::vector<ast::Attribute>> parse_attribute_group();
-        result::Result<ast::TypeExprPtr> parse_type_expression();
-        result::Result<ast::TypeExprPtr> parse_return_type();
-        result::Result<ast::BlockPtr> parse_optional_body();
-        result::Result<std::vector<ast::ExpressionPtr>> parse_arguments();
-        result::Result<std::vector<ast::VariableDeclPtr>> parse_parameters();
-
-        result::Result<ast::ExpressionPtr> parse_expression();
-        result::Result<ast::ExpressionPtr> parse_binary(
-            result::Result<ast::ExpressionPtr> (Parser::*lower)(),
-            std::initializer_list<std::pair<lexer::TokenKind, ast::BinaryOperatorKind>> operators
-        );
-        result::Result<ast::ExpressionPtr> parse_assignment();
-        result::Result<ast::ExpressionPtr> parse_ternary();
-        result::Result<ast::ExpressionPtr> parse_logical_or();
-        result::Result<ast::ExpressionPtr> parse_logical_and();
-        result::Result<ast::ExpressionPtr> parse_bitwise_or();
-        result::Result<ast::ExpressionPtr> parse_bitwise_xor();
-        result::Result<ast::ExpressionPtr> parse_bitwise_and();
-        result::Result<ast::ExpressionPtr> parse_equality();
-        result::Result<ast::ExpressionPtr> parse_comparison();
-        result::Result<ast::ExpressionPtr> parse_shift();
-        result::Result<ast::ExpressionPtr> parse_term();
-        result::Result<ast::ExpressionPtr> parse_factor();
-        result::Result<ast::ExpressionPtr> parse_unary();
-        result::Result<ast::ExpressionPtr> parse_postfix();
-        result::Result<ast::ExpressionPtr> parse_primary();
-
-        bool is_assignment_token(lexer::TokenKind kind) const;
-        bool is_unary_token(lexer::TokenKind kind) const;
-
-        result::Result<ast::ExpressionPtr> parse_array_literal();
-        result::Result<ast::ExpressionPtr> parse_struct_literal(source::Span span, ast::TypeExprPtr type_expr);
-        result::Result<std::vector<ast::ExpressionPtr>> parse_braced_expressions(const std::string& what);
-
-        result::Result<ast::DeclarationPtr> parse_declaration();
-        void synchronize_declaration(std::size_t start_cursor);
-        result::Result<ast::StatementPtr> parse_statement();
-        result::Result<ast::BlockPtr> parse_block();
-        result::Result<ast::StatementPtr> parse_if_statement();
-        result::Result<ast::StatementPtr> parse_while_statement();
-
-        result::Result<ast::VariableDeclPtr> parse_variable_declaration(bool is_public = false);
-        result::Result<ast::FunctionDeclPtr> parse_function_declaration(bool is_public = false);
-        result::Result<ast::StructFieldDeclPtr> parse_struct_field_declaration(bool is_public = false);
-        result::Result<ast::MethodDeclPtr> parse_method_declaration(bool is_public = false, bool is_static = false);
-        result::Result<ast::MethodDeclPtr> parse_method_declaration(
-            bool is_public,
-            bool is_static,
-            const ast::Name* impl_type
-        );
-        result::Result<std::pair<std::optional<ast::SelfReceiver>, std::vector<ast::VariableDeclPtr>>>
-        parse_method_parameters(const ast::Name* impl_type);
-        result::Result<ast::StructDeclPtr> parse_struct_declaration(bool is_public = false);
-        result::Result<ast::ImplDeclPtr> parse_impl_declaration();
+private:
+    struct Metadata {
+        ast::DocComments docs;
+        ast::AttributeLists attributes;
     };
+
+    Parser(const lexer::TokenStream&, source::FileID);
+    ParserOutput parse();
+
+    const lexer::TokenStream& tokens_;
+    source::FileID fid_;
+    std::size_t cursor_ = 0;
+    std::size_t depth_ = 0;
+    diagnostics::DiagnosticCollector diagnostics_;
+    lexer::Token eof_;
+    bool no_struct_literal_ = false;
+
+    const lexer::Token& peek(std::size_t n = 0) const;
+    const lexer::Token& advance();
+    source::Span previous_span() const;
+    bool check(lexer::TokenKind) const;
+    bool match(lexer::TokenKind);
+    result::Result<lexer::Token> expect(lexer::TokenKind, const char* message);
+    bool at_eof() const;
+    std::string_view text(const lexer::Token&) const;
+    std::string_view ct_text(const lexer::Token&) const;
+    source::Span span_from(source::Span start, source::Span end) const;
+    result::Result<ast::PathPtr> parse_module_path();
+    result::Result<ast::PathPtr> parse_name();
+    result::Result<ast::DeclNamePtr> parse_decl_name();
+    result::Result<ast::PathPtr> parse_type_path();
+    result::Result<ast::TypePtr> parse_type();
+    result::Result<ast::TypePtr> parse_auto_type();
+    result::Result<ast::ExpressionPtr> parse_expression();
+    result::Result<ast::ExpressionPtr> parse_cond();
+    result::Result<ast::ExpressionPtr> parse_logical_or();
+    result::Result<ast::ExpressionPtr> parse_logical_and();
+    result::Result<ast::ExpressionPtr> parse_comparison();
+    result::Result<ast::ExpressionPtr> parse_bitor();
+    result::Result<ast::ExpressionPtr> parse_bitxor();
+    result::Result<ast::ExpressionPtr> parse_bitand();
+    result::Result<ast::ExpressionPtr> parse_shift();
+    result::Result<ast::ExpressionPtr> parse_add();
+    result::Result<ast::ExpressionPtr> parse_mul();
+    result::Result<ast::ExpressionPtr> parse_unary();
+    result::Result<ast::ExpressionPtr> parse_power();
+    result::Result<ast::ExpressionPtr> parse_postfix();
+    result::Result<ast::ExpressionPtr> parse_primary();
+    result::Result<ast::ExpressionPtr> parse_intrinsic_expr();
+    result::Result<std::vector<ast::ExpressionPtr>> parse_argument_list();
+    result::Result<std::vector<ast::ExpressionPtr>> parse_expression_list();
+    result::Result<ast::BlockPtr> parse_block();
+    result::Result<ast::StatementPtr> parse_stmt();
+    result::Result<ast::StatementPtr> parse_var_decl(bool module_level = false);
+    result::Result<ast::StatementPtr> parse_if_stmt();
+    result::Result<ast::StatementPtr> parse_while_stmt();
+    result::Result<ast::StatementPtr> parse_do_stmt();
+    result::Result<ast::StatementPtr> parse_ct_if_stmt();
+    result::Result<ast::ItemPtr> parse_item();
+    result::Result<ast::NodePtr> parse_import_decl();
+    result::Result<ast::NodePtr> parse_module_decl();
+    result::Result<ast::ItemPtr> parse_func_decl();
+    result::Result<ast::ItemPtr> parse_type_decl();
+    result::Result<ast::ItemPtr> parse_impl_decl();
+    result::Result<ast::FieldDeclPtr> parse_field_decl();
+    result::Result<ast::ParamPtr> parse_param();
+    result::Result<ast::NodePtr> parse_method_decl();
+    result::Result<ast::CtIfItemPtr> parse_ct_if_item();
+    result::Result<ast::CtIfFieldPtr> parse_ct_if_field();
+    result::Result<ast::CtIfMemberPtr> parse_ct_if_member();
+    result::Result<Metadata> parse_metadata(bool collect_docs_first = false);
+    result::Result<ast::AttributeListPtr> parse_attribute_list();
+    void report(const char* message, source::Span span);
+    void synchronize_statement();
+    void synchronize_item();
+};
 } // namespace xenon::parser

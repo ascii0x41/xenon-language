@@ -1,14 +1,12 @@
 #pragma once
 
-#include "ast/ast.h"
-#include "ast/header.h"
+#include "astlib/astlib.h"
 #include "common/result/result.h"
 
 namespace xenon::sema {
 
     struct Output {
-        ast::AST ast;
-        ast::HeaderInfo header;
+        ast::SourceFilePtr ast;
     };
 
     using AnalyserOutput = result::Output<Output>;
