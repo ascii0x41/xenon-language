@@ -31,3 +31,4 @@ docs/compiler
 *.old
 .clangd
 .github/
+build-installer/
